@@ -1,0 +1,97 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║           Multi-Brand AI Content Platform  —  .gitignore        ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+
+# ── Build output ──────────────────────────────────────────────────────────────
+dist/
+build/
+.nest/
+
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+
+# ── Test & coverage ───────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+test-results/
+*.lcov
+
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
+*.tsbuildinfo
+*.js.map
+*.d.ts.map
+
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+# ── IDE & editors ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+*.vim
+.project
+.classpath
+.settings/
+
+
+# ── Runtime & temp ────────────────────────────────────────────────────────────
+tmp/
+temp/
+.tmp/
+*.tmp
+*.cache
+.eslintcache
+.stylelintcache
+
+
+# ── Uploads (local dev only) ──────────────────────────────────────────────────
+uploads/
+public/uploads/
