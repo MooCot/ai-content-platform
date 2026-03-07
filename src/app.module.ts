@@ -9,6 +9,7 @@ import { AgentsModule } from './agents/agents.module';
 import { LLMModule } from './llm/llm.module';
 import { ToolsModule } from './tools/tools.module';
 import { StreamingModule } from './streaming/streaming.module';
+import { HealthController } from './common/health/health.controller';
 
 // Entities
 import { BrandEntity } from './brands/entities/brand.entity';
@@ -16,6 +17,7 @@ import { DocumentEntity } from './rag/entities/document.entity';
 import { ContentJobEntity } from './content/entities/content-job.entity';
 
 @Module({
+  controllers: [HealthController],
   imports: [
     // ── Config ──────────────────────────────────────────────────────────────
     ConfigModule.forRoot({
