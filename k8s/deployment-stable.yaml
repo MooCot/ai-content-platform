@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-platform-stable
+  namespace: ${NAMESPACE}
+  labels:
+    app: content-platform
+    track: stable
+    version: "${IMAGE_TAG}"
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: ${REPLICAS}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: content-platform
+      track: stable
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # zero-downtime rollout
+  template:
+    metadata:
+      labels:
+        app: content-platform
+        track: stable
+        version: "${IMAGE_TAG}"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "3000"
+        prometheus.io/path:   "/api/v1/metrics"
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      terminationGracePeriodSeconds: 60
+
+      # ── Security context ────────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup:   1001
+
+      containers:
+        - name: app
+          image: registry.gitlab.lenincrew.tech/content-platform:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          # ── Environment ─────────────────────────────────────────────
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: DB_HOST
+              value: "${DB_HOST}"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "content_platform"
+            - name: QDRANT_URL
+              value: "${QDRANT_URL}"
+          envFrom:
+            - secretRef:
+                name: app-secrets
+
+          # ── Probes ──────────────────────────────────────────────────
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            failureThreshold: 12     # 12 × 5s = 60s startup budget
+            periodSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # ── Resources ───────────────────────────────────────────────
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "512Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+
+          # ── Graceful shutdown ────────────────────────────────────────
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          # ── Security ─────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:    true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # ── Topology spread — не ставить 2 пода на 1 ноду ───────────────
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: content-platform
+              track: stable

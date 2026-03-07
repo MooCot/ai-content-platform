@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: content-platform-ingress
+  namespace: content-platform-prod
+  annotations:
+    kubernetes.io/ingress.class:                   "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size:   "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # SSE: отключаем буферизацию прокси для Server-Sent Events
+    nginx.ingress.kubernetes.io/proxy-buffering:   "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # TLS via cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - content-platform.lenincrew.tech
+      secretName: content-platform-tls
+  rules:
+    - host: content-platform.lenincrew.tech
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: content-platform
+                port:
+                  name: http

@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-platform-canary
+  namespace: ${NAMESPACE}
+  labels:
+    app: content-platform
+    track: canary
+    version: "${IMAGE_TAG}"
+  annotations:
+    # Используется verify-canary.sh для идентификации
+    deployment.kubernetes.io/canary: "true"
+    deployment.kubernetes.io/canary-version: "${IMAGE_TAG}"
+spec:
+  replicas: ${REPLICAS}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: content-platform
+      track: canary
+  strategy:
+    type: Recreate             # канарейка — всегда полная замена
+  template:
+    metadata:
+      labels:
+        app: content-platform
+        track: canary
+        version: "${IMAGE_TAG}"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "3000"
+        prometheus.io/path:   "/api/v1/metrics"
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      terminationGracePeriodSeconds: 30
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup:   1001
+
+      containers:
+        - name: app
+          image: registry.gitlab.lenincrew.tech/content-platform:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: DB_HOST
+              value: "${DB_HOST}"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "content_platform"
+            - name: QDRANT_URL
+              value: "${QDRANT_URL}"
+            # Маркер для логов/трейсинга: понятно, что это канарейка
+            - name: DEPLOY_TRACK
+              value: "canary"
+            - name: DEPLOY_VERSION
+              value: "${IMAGE_TAG}"
+          envFrom:
+            - secretRef:
+                name: app-secrets
+
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            failureThreshold: 12
+            periodSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "512Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:    true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
