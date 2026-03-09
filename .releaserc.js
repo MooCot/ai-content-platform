@@ -1,5 +1,5 @@
 module.exports = {
-  branches: ["main"],
+  branches: ["master"],
   repositoryUrl: `https://${process.env.GL_TOKEN}@${process.env.CI_SERVER_HOST}/${process.env.CI_PROJECT_PATH}`,
   plugins: [
     [
@@ -48,7 +48,7 @@ module.exports = {
     [
       "@semantic-release/gitlab",
       {
-        gitlabUrl: "https://gitlab.lenincrew.tech",
+        gitlabUrl: process.env.CI_SERVER_URL,
       },
     ],
   ],

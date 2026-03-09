@@ -73,7 +73,7 @@ install:
     - npm ci --prefer-offline
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 lint:
   stage: validate
@@ -83,7 +83,7 @@ lint:
   needs: [install]
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 typecheck:
   stage: validate
@@ -93,7 +93,7 @@ typecheck:
   needs: [install]
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  TEST                                                            ║
@@ -118,7 +118,7 @@ unit:test:
     expire_in: 7 days
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  BUILD                                                           ║
@@ -152,7 +152,7 @@ build:image:
     - docker push "$IMAGE_CANARY_TAG"
   needs: [lint, typecheck, unit:test]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  STAGING                                                         ║
@@ -202,7 +202,7 @@ deploy:staging:
     - bash scripts/smoke-test.sh "https://staging.content-platform.lenincrew.tech"
   needs: [build:image]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 stop:staging:
   stage: deploy:staging
@@ -217,7 +217,7 @@ stop:staging:
     - kubectl delete namespace "$KUBE_NAMESPACE_STAGING" --ignore-not-found
   when: manual
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  CANARY  (10% трафика)                                           ║
@@ -262,7 +262,7 @@ deploy:canary:
     - echo "Canary deployed. Weight = ${CANARY_WEIGHT}%. Monitoring for ${CANARY_VERIFY_DURATION}s..."
   needs: [deploy:staging]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  VERIFY CANARY                                                   ║
@@ -278,7 +278,7 @@ verify:canary:auto:
   needs: [deploy:canary]
   allow_failure: false
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 rollback:canary:
   stage: verify:canary
@@ -301,7 +301,7 @@ rollback:canary:
   when: on_failure
   needs: [verify:canary:auto]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  PRODUCTION  (полный роллаут)                                    ║
@@ -345,7 +345,7 @@ deploy:production:
     - bash scripts/smoke-test.sh "https://content-platform.lenincrew.tech"
   needs: [verify:canary:auto]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  RELEASE  (semantic-release)                                     ║
@@ -360,4 +360,4 @@ release:
     - npx semantic-release
   needs: [deploy:production]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
