@@ -59,7 +59,13 @@
     "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "semantic-release": "^23.0.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^11.1.0",
+    "@semantic-release/github": "^10.0.3",
+    "@semantic-release/release-notes-generator": "^12.1.0",
+    "conventional-changelog-conventionalcommits": "^7.0.2"
   },
   "jest": {
     "moduleFileExtensions": ["js", "json", "ts"],

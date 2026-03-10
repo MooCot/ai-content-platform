@@ -1,0 +1,100 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  CI  —  validate + test                                         ║
+# ║  Runs on every push and on PRs targeting master                 ║
+# ╚══════════════════════════════════════════════════════════════════╝
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Install (кешируем node_modules) ──────────────────────────────
+  install:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - uses: actions/cache/save@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
+
+  # ── Lint + typecheck параллельно ──────────────────────────────────
+  lint:
+    name: Lint
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
+      - run: npm run lint
+
+  typecheck:
+    name: Type check
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
+      - run: npx tsc --noEmit
+
+  # ── Unit tests + coverage ────────────────────────────────────────
+  test:
+    name: Unit tests
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Run tests
+        run: npm run test -- --ci --forceExit --coverage
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+      - name: Coverage summary
+        uses: davelosert/vitest-coverage-report-action@v2
+        if: github.event_name == 'pull_request'
+        with:
+          json-summary-path: coverage/coverage-summary.json
+        continue-on-error: true

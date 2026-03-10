@@ -42,7 +42,7 @@ spec:
 
       containers:
         - name: app
-          image: registry.gitlab.lenincrew.tech/content-platform:${IMAGE_TAG}
+          image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/content-platform:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - name: http
