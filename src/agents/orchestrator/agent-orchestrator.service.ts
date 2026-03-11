@@ -8,11 +8,19 @@ import { QAAgent } from '../agents/qa.agent';
 import { StreamingService } from '../../streaming/streaming.service';
 import { AgentRole, ContentResult } from '../../common/types/domain.types';
 
+// Per-agent timeout budgets (ms). Generator gets the most time because it streams.
+const AGENT_TIMEOUTS: Record<AgentRole, number> = {
+  [AgentRole.PLANNER]:    30_000,
+  [AgentRole.RESEARCHER]: 20_000,
+  [AgentRole.GENERATOR]:  120_000,
+  [AgentRole.OPTIMIZER]:  60_000,
+  [AgentRole.QA]:         60_000,
+};
+
 @Injectable()
 export class AgentOrchestratorService {
   private readonly logger = new Logger(AgentOrchestratorService.name);
 
-  // Pipeline order is strictly enforced here
   private readonly pipeline: AgentRole[] = [
     AgentRole.PLANNER,
     AgentRole.RESEARCHER,
@@ -34,29 +42,31 @@ export class AgentOrchestratorService {
     this.logger.log(`[${ctx.jobId}] Pipeline starting: ${this.pipeline.join(' → ')}`);
 
     const agents: Record<AgentRole, () => Promise<void>> = {
-      [AgentRole.PLANNER]: () => this.planner.run(ctx),
+      [AgentRole.PLANNER]:    () => this.planner.run(ctx),
       [AgentRole.RESEARCHER]: () => this.researcher.run(ctx),
-      [AgentRole.GENERATOR]: () => this.generator.run(ctx),
-      [AgentRole.OPTIMIZER]: () => this.optimizer.run(ctx),
-      [AgentRole.QA]: () => this.qa.run(ctx),
+      [AgentRole.GENERATOR]:  () => this.generator.run(ctx),
+      [AgentRole.OPTIMIZER]:  () => this.optimizer.run(ctx),
+      [AgentRole.QA]:         () => this.qa.run(ctx),
     };
 
     for (const role of this.pipeline) {
       if (ctx.isCancelled) {
-        this.logger.warn(`[${ctx.jobId}] Pipeline cancelled at ${role}`);
+        this.logger.warn(`[${ctx.jobId}] Pipeline cancelled before ${role}`);
         break;
       }
 
-      // Emit agent_start event
       this.streaming.emit(ctx.jobId, {
         type: 'agent_start',
         data: { agent: role },
         jobId: ctx.jobId,
       });
 
-      await agents[role]();
+      // ── Fix 3: per-agent timeout ───────────────────────────────────────────
+      // If an agent hangs (e.g. LLM stops streaming mid-response), the race
+      // rejects after the budget expires. The error propagates up to
+      // ContentService.runPipeline() which marks the job FAILED.
+      await this.withTimeout(role, agents[role]());
 
-      // Emit agent_done event with the step output
       const lastStep = ctx.steps[ctx.steps.length - 1];
       this.streaming.emit(ctx.jobId, {
         type: 'agent_done',
@@ -81,5 +91,18 @@ export class AgentOrchestratorService {
 
     this.logger.log(`[${ctx.jobId}] Pipeline complete`);
     return result;
+  }
+
+  private withTimeout(role: AgentRole, task: Promise<void>): Promise<void> {
+    const ms = AGENT_TIMEOUTS[role];
+    return Promise.race([
+      task,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`${role} agent timed out after ${ms / 1000}s`)),
+          ms,
+        ),
+      ),
+    ]);
   }
 }

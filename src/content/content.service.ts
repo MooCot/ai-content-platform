@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import pLimit from 'p-limit';
 import { ContentJobEntity } from './entities/content-job.entity';
 import { GenerateContentDto } from './dto/content.dto';
 import { BrandsService } from '../brands/brands.service';
@@ -10,9 +11,14 @@ import { AgentContext } from '../agents/context/agent-context';
 import { BrandId, ContentType, JobId, JobStatus } from '../common/types/domain.types';
 import { ContentJobNotFoundException } from '../common/exceptions/domain.exceptions';
 
+// Max simultaneous agent pipelines in this process instance.
+// Prevents 100 concurrent jobs from hammering LLM rate limits.
+const MAX_CONCURRENT_PIPELINES = 5;
+
 @Injectable()
-export class ContentService {
+export class ContentService implements OnModuleInit {
   private readonly logger = new Logger(ContentService.name);
+  private readonly limit = pLimit(MAX_CONCURRENT_PIPELINES);
 
   constructor(
     @InjectRepository(ContentJobEntity)
@@ -22,8 +28,19 @@ export class ContentService {
     private readonly streaming: StreamingService,
   ) {}
 
+  // ── Fix 1: zombie-job cleanup ──────────────────────────────────────────────
+  // Any job left RUNNING when the server starts never finished — mark it FAILED.
+  async onModuleInit(): Promise<void> {
+    const { affected } = await this.jobRepo.update(
+      { status: JobStatus.RUNNING },
+      { status: JobStatus.FAILED, errorMessage: 'Server restarted while job was running' },
+    );
+    if (affected && affected > 0) {
+      this.logger.warn(`Marked ${affected} zombie job(s) as FAILED on startup`);
+    }
+  }
+
   async createJob(brandId: BrandId, dto: GenerateContentDto): Promise<ContentJobEntity> {
-    // Validate brand exists
     const brand = await this.brandsService.findById(brandId);
 
     const job = this.jobRepo.create({
@@ -36,8 +53,10 @@ export class ContentService {
 
     this.logger.log(`Content job created: ${job.id} (brand: ${brandId})`);
 
-    // Fire-and-forget: run pipeline async without blocking the HTTP response
-    void this.runPipeline(job.id, brand, dto);
+    // ── Fix 2: concurrency semaphore ────────────────────────────────────────
+    // p-limit queues the call until a slot is free — at most MAX_CONCURRENT_PIPELINES
+    // pipelines run simultaneously, the rest wait in-process.
+    void this.limit(() => this.runPipeline(job.id, brand, dto));
 
     return job;
   }
@@ -61,7 +80,6 @@ export class ContentService {
     brand: Awaited<ReturnType<BrandsService['findById']>>,
     dto: GenerateContentDto,
   ): Promise<void> {
-    // Update status to RUNNING
     await this.jobRepo.update(jobId, { status: JobStatus.RUNNING });
 
     const ctx = new AgentContext({
