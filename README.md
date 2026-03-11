@@ -173,84 +173,84 @@ curl -N http://localhost:3000/api/v1/stream/{jobId}
 
 Два независимых workflow на GitHub Actions.
 
-**`ci.yml`** — запускается на каждый пуш и на PR в `master`:
+**`ci.yml`** — triggers on every push and on PRs targeting `master`:
 
 ```
 install
-   ├── lint        (параллельно)
-   └── typecheck   (параллельно)
+   ├── lint        (parallel)
+   └── typecheck   (parallel)
         └── test   (coverage artifact)
 ```
 
-**`deploy.yml`** — запускается только при пуше в `master`:
+**`deploy.yml`** — triggers only on push to `master`:
 
 ```
 build
   Dockerfile → ghcr.io/<owner>/content-platform:<sha>
-  BuildKit layer cache от предыдущего :stable образа
+  BuildKit layer cache from previous :stable image
        │
        ▼
 deploy-staging
   kubectl apply → namespace content-platform-staging
-  Ждёт rollout status → smoke-test.sh
+  Waits for rollout status → smoke-test.sh
        │
        ▼
-deploy-canary                        10% трафика
+deploy-canary                        10% of traffic
   kubectl apply deployment-canary    NGINX canary-weight=10
-  1 реплика, DEPLOY_TRACK=canary в env
+  1 replica, DEPLOY_TRACK=canary in env
        │
        ▼
-verify-canary                        ~2 минуты наблюдения
+verify-canary                        ~2 minutes observation
   Prometheus: error rate < 1%
   Prometheus: p99 latency < 2000ms
-  Опрос каждые 15 секунд
+  Polls every 15 seconds
        │
    FAIL ──► inline rollback
-       │     удаляет Deployment canary
-       │     снимает NGINX аннотации
-       │     100% трафика на stable
+       │     deletes canary Deployment
+       │     removes NGINX annotations
+       │     100% traffic back on stable
        │
       OK
        │
        ▼
 deploy-production
-  RollingUpdate stable → 3 реплики, maxUnavailable=0
-  Удаляет canary Deployment
-  Перетегирует <sha> → :stable в GHCR
+  RollingUpdate stable → 3 replicas, maxUnavailable=0
+  Deletes canary Deployment
+  Retags <sha> → :stable in GHCR
   smoke-test.sh
        │
        ▼
 release
-  semantic-release → CHANGELOG.md + GitHub Release + тег
+  semantic-release → CHANGELOG.md + GitHub Release + git tag
 ```
 
 ### Canary deployment
 
-Разделение трафика реализовано через аннотации NGINX Ingress:
+Traffic splitting is handled via NGINX Ingress annotations:
 
 ```yaml
 nginx.ingress.kubernetes.io/canary: "true"
 nginx.ingress.kubernetes.io/canary-weight: "10"
 ```
 
-Оба `Deployment` (stable и canary) находятся за одним `Service`. После успешной верификации аннотации снимаются — весь трафик уходит на stable.
+Both `Deployment` resources (stable and canary) sit behind the same `Service`. Once the canary passes verification the annotations are removed and 100% of traffic returns to stable.
 
 ### GitHub Secrets
 
-| Secret | Описание |
+| Secret | Description |
 |---|---|
-| `KUBE_CONFIG_STAGING` | base64 kubeconfig staging кластера |
-| `KUBE_CONFIG_PROD` | base64 kubeconfig prod кластера |
-| `DB_HOST_STAGING` / `DB_HOST_PROD` | хост PostgreSQL |
-| `DB_PASSWORD_STAGING` | пароль БД staging |
-| `QDRANT_URL_STAGING` / `QDRANT_URL_PROD` | URL Qdrant |
-| `QDRANT_API_KEY` | API ключ Qdrant |
+| `KUBE_CONFIG_STAGING` | base64-encoded kubeconfig for the staging cluster |
+| `KUBE_CONFIG_PROD` | base64-encoded kubeconfig for the production cluster |
+| `DB_HOST_STAGING` / `DB_HOST_PROD` | PostgreSQL host |
+| `DB_PASSWORD_STAGING` | Database password (staging) |
+| `QDRANT_URL_STAGING` / `QDRANT_URL_PROD` | Qdrant URL |
+| `QDRANT_API_KEY` | Qdrant API key |
 | `OPENAI_API_KEY` | OpenAI |
 | `ANTHROPIC_API_KEY` | Anthropic Claude |
 | `GOOGLE_AI_API_KEY` | Google Gemini |
-| `PROMETHEUS_URL` | внутренний адрес Prometheus (для canary verify) |
+| `PROMETHEUS_URL` | Internal Prometheus address (used by canary verification) |
 
-`GITHUB_TOKEN` — встроенный, настраивать не нужно. Используется для GHCR и semantic-release.
+`GITHUB_TOKEN` is provided automatically by GitHub Actions — no configuration needed. Used for GHCR authentication and semantic-release.
 
 ---
 
