@@ -33,9 +33,37 @@ export enum DocumentStatus {
 export enum JobStatus {
   QUEUED = 'QUEUED',
   RUNNING = 'RUNNING',
+  RETRYING = 'RETRYING',
   DONE = 'DONE',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
+}
+
+// ─── Memory types ─────────────────────────────────────────────────────────────
+export type MemoryEventId = string;
+
+export interface RelevantMemory {
+  eventId: MemoryEventId;
+  agent: AgentRole;
+  eventType: string;
+  content: string;
+  score: number;
+  createdAt: Date;
+}
+
+// ─── Evaluation types ─────────────────────────────────────────────────────────
+export interface EvaluationDimensions {
+  relevance: { score: number };
+  tone: { score: number; detected: string; target: string };
+  factuality: { score: number; supportedClaims: number; totalClaims: number };
+  readability: { score: number };
+}
+
+export interface CompositeScoreInput {
+  relevance: number;
+  tone: number;
+  factuality: number;
+  readability: number; // already normalized 0-1
 }
 
 export enum AgentRole {
