@@ -1,3 +1,6 @@
+// Must be the very first import — patches http/pg/ioredis before NestJS loads
+import './instrumentation';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';

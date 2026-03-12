@@ -48,6 +48,34 @@ export const configuration = () => ({
     heartbeatIntervalMs: parseInt(process.env.SSE_HEARTBEAT_INTERVAL_MS ?? '15000', 10),
     maxDurationMs: parseInt(process.env.STREAM_MAX_DURATION_MS ?? '300000', 10),
   },
+
+  redis: {
+    host: process.env.REDIS_HOST ?? 'localhost',
+    port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+    password: process.env.REDIS_PASSWORD,
+  },
+
+  observability: {
+    otlpEndpoint:
+      process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? 'http://localhost:4318/v1/traces',
+    metricsEnabled: process.env.METRICS_ENABLED !== 'false',
+    // Cost per 1K tokens (USD). Override per model via env as needed.
+    tokenCostPerKUsd: {
+      'claude-3-5-sonnet-20241022': 0.003,
+      'gpt-4o': 0.005,
+      'gemini-1.5-pro': 0.00125,
+    } as Record<string, number>,
+  },
+
+  evaluation: {
+    memoryIndexingThreshold: parseFloat(process.env.MEMORY_INDEXING_THRESHOLD ?? '0.70'),
+    compositeWeights: {
+      relevance: 0.3,
+      tone: 0.25,
+      factuality: 0.25,
+      readability: 0.2,
+    },
+  },
 });
 
 export type AppConfig = ReturnType<typeof configuration>;
