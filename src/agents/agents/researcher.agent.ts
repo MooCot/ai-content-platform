@@ -1,19 +1,37 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RAGService } from '../../rag/services/rag.service';
+import { MemoryService } from '../../memory/memory.service';
 import { AgentContext } from '../context/agent-context';
-import { AgentRole, LLMProvider, SearchResult } from '../../common/types/domain.types';
+import { AgentRole, SearchResult } from '../../common/types/domain.types';
 
 @Injectable()
 export class ResearcherAgent {
   private readonly logger = new Logger(ResearcherAgent.name);
 
-  constructor(private readonly ragService: RAGService) {}
+  constructor(
+    private readonly ragService: RAGService,
+    private readonly memory: MemoryService,
+  ) {}
 
   async run(ctx: AgentContext): Promise<void> {
     ctx.checkCancelled(AgentRole.RESEARCHER);
     const startedAt = Date.now();
 
     this.logger.log(`[${ctx.jobId}] ResearcherAgent: ${ctx.searchQueries.length} queries`);
+
+    // Recall relevant past generations for this topic (best-effort, 200 ms timeout)
+    const pastMemories = await Promise.race([
+      this.memory.queryRelevant(ctx.brandId, ctx.topic, { limit: 3 }),
+      new Promise<[]>((resolve) => setTimeout(() => resolve([]), 200)),
+    ]);
+
+    if (pastMemories.length) {
+      this.logger.debug(
+        `[${ctx.jobId}] Loaded ${pastMemories.length} past memory entries for topic "${ctx.topic}"`,
+      );
+      // Store on context so generator/optimizer can reference prior angles
+      (ctx as unknown as Record<string, unknown>)['pastMemories'] = pastMemories;
+    }
 
     if (!ctx.brandConfig.ragEnabled || ctx.searchQueries.length === 0) {
       this.logger.log(`[${ctx.jobId}] RAG disabled or no queries — skipping`);

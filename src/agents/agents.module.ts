@@ -9,9 +9,10 @@ import { LLMModule } from '../llm/llm.module';
 import { RAGModule } from '../rag/rag.module';
 import { ToolsModule } from '../tools/tools.module';
 import { StreamingModule } from '../streaming/streaming.module';
+import { MemoryModule } from '../memory/memory.module';
 
 @Module({
-  imports: [LLMModule, RAGModule, ToolsModule, StreamingModule],
+  imports: [LLMModule, RAGModule, ToolsModule, StreamingModule, MemoryModule],
   providers: [
     PlannerAgent,
     ResearcherAgent,

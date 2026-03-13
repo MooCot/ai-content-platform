@@ -41,18 +41,23 @@ export class AgentContext {
 
   isCancelled = false;
 
+  /** X-Correlation-ID propagated from the original HTTP request. */
+  readonly correlationId: string;
+
   constructor(opts: {
     jobId: JobId;
     brandId: BrandId;
     brandConfig: BrandConfig;
     topic: string;
     contentType: ContentType;
+    correlationId?: string;
   }) {
     this.jobId = opts.jobId;
     this.brandId = opts.brandId;
     this.brandConfig = opts.brandConfig;
     this.topic = opts.topic;
     this.contentType = opts.contentType;
+    this.correlationId = opts.correlationId ?? '';
   }
 
   recordStep(step: Omit<AgentStep, 'startedAt'>): void {

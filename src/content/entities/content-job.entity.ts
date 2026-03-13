@@ -8,12 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import {
-  AgentStep,
-  ContentResult,
-  ContentType,
-  JobStatus,
-} from '../../common/types/domain.types';
+import { AgentStep, ContentResult, ContentType, JobStatus } from '../../common/types/domain.types';
 import { BrandEntity } from '../../brands/entities/brand.entity';
 
 @Entity('content_jobs')
@@ -55,6 +50,18 @@ export class ContentJobEntity {
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage!: string | null;
+
+  /** BullMQ job ID — same as `id` (used as idempotency key). Kept for debuggability. */
+  @Column({ name: 'queue_job_id', nullable: true })
+  queueJobId!: string | null;
+
+  /** How many times this job has been attempted (incremented by the processor). */
+  @Column({ default: 0 })
+  attempts!: number;
+
+  /** X-Correlation-ID from the originating HTTP request. */
+  @Column({ name: 'correlation_id', nullable: true })
+  correlationId!: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

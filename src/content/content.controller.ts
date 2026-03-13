@@ -1,14 +1,9 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Body,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Headers, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { randomUUID } from 'crypto';
 import { ContentService } from './content.service';
 import { GenerateContentDto } from './dto/content.dto';
+import { CORRELATION_ID_HEADER } from '../observability/middleware/correlation-id.middleware';
 
 @ApiTags('content')
 @Controller('brands/:brandId/content')
@@ -21,8 +16,9 @@ export class ContentController {
   async generate(
     @Param('brandId', ParseUUIDPipe) brandId: string,
     @Body() dto: GenerateContentDto,
+    @Headers(CORRELATION_ID_HEADER) correlationId: string,
   ) {
-    const job = await this.contentService.createJob(brandId, dto);
+    const job = await this.contentService.createJob(brandId, dto, correlationId ?? randomUUID());
     return {
       jobId: job.id,
       status: job.status,
