@@ -5,29 +5,35 @@ Production-grade AI content generation platform built with NestJS, featuring mul
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     HTTP API  (NestJS)                          │
-│  /brands  │  /brands/:id/rag  │  /brands/:id/content  │ /stream │
-└─────┬─────┴────────┬──────────┴──────────┬────────────┴────┬────┘
-      │              │                     │                 │
-      ▼              ▼                     ▼                 ▼
-┌──────────┐  ┌───────────┐  ┌─────────────────────┐  ┌──────────┐
-│  Brands  │  │    RAG    │  │   Content / Agents  │  │Streaming │
-│  Module  │  │  Module   │  │       Module        │  │  Module  │
-└────┬─────┘  └─────┬─────┘  └──────────┬──────────┘  └──────────┘
-     │               │                  │
-     └───────────────┼──────────────────┘
-                     ▼
-          ┌─────────────────────┐
-          │     LLM Router      │
-          │ Claude│OpenAI│Gemini│
-          │  retry + fallback   │
-          └─────────┬───────────┘
-                    │
-          ┌─────────▼───────────┐
-          │   Infrastructure    │
-          │ PostgreSQL │ Qdrant │
-          └─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           HTTP API  (NestJS)                             │
+│  /brands  │  /rag  │  /content  │  /stream  │  /evaluations  │  /metrics │
+└──┬────────┴───┬────┴──────┬─────┴─────┬─────┴───────┬────────┴─────┬────┘
+   │            │           │           │             │              │
+   ▼            ▼           ▼           ▼             ▼              ▼
+Brands        RAG       Content      Streaming   Evaluation    Observability
+Module       Module      Module       Module       Module     (metrics/tracing)
+               │           │                        │
+               │           ▼                        │
+               │     Queue Module ──────────────────┘
+               │     (BullMQ/Redis)
+               │           │
+               │           ▼
+               │     Agent Pipeline
+               │     Planner→Researcher→Generator→Optimizer→QA
+               │           │
+               └───────────┤
+                           ▼
+                  ┌─────────────────────┐
+                  │     LLM Router      │
+                  │ Claude│OpenAI│Gemini│
+                  │  retry + fallback   │
+                  └─────────┬───────────┘
+                            │
+                  ┌─────────▼─────────────────────┐
+                  │        Infrastructure          │
+                  │ PostgreSQL │ Qdrant │  Redis   │
+                  └───────────────────────────────┘
 ```
 
 ### Agent Pipeline
@@ -36,27 +42,36 @@ Production-grade AI content generation platform built with NestJS, featuring mul
 POST /brands/:id/content/generate
           │
           ▼
-    PlannerAgent        ← Claude (structured JSON)
+    ContentService         enqueues BullMQ job (idempotent by jobId)
+          │
+          ▼  [Redis queue]
+    ContentPipelineProcessor  (concurrency: 5, 3 retries, exp. backoff)
+          │
+          ▼
+    PlannerAgent           ← Claude (structured JSON)
     (outline, queries, tone)
           │
           ▼
-    ResearcherAgent     ← Qdrant semantic search (parallel queries)
-    (RAG context, citations)
+    ResearcherAgent        ← Qdrant RAG + episodic memory recall (200 ms timeout)
+    (RAG context, past memories, citations)
           │
           ▼
-    GeneratorAgent      ← Claude (streaming → SSE tokens)
+    GeneratorAgent         ← Claude (streaming → SSE tokens)
     (draft content)
           │
           ▼
-    OptimizerAgent      ← OpenAI + SEO/Tone tools
+    OptimizerAgent         ← OpenAI + SEO/Tone tools
     (optimized content, keywords)
           │
           ▼
-    QAAgent             ← Claude + Readability tool
+    QAAgent                ← Claude + Readability tool
     (final content, quality score)
           │
-          ▼
-    SSE: job_done event
+          ├─► SSE: job_done event
+          │
+          └─► EvaluationService (fire-and-forget)
+                relevance + tone + factuality → composite score
+                if score ≥ 0.70 → embed into episodic memory (Qdrant)
 ```
 
 ## Tech Stack
@@ -66,19 +81,22 @@ POST /brands/:id/content/generate
 | Framework | NestJS 10 + TypeScript strict |
 | Database | PostgreSQL 16 (TypeORM) |
 | Vector DB | Qdrant 1.9 |
+| Job queue | BullMQ 5 + Redis (ioredis) |
 | LLM providers | OpenAI (GPT-4o), Claude (claude-sonnet-4-6), Gemini 1.5 Pro |
 | Streaming | Server-Sent Events (SSE) |
 | Validation | class-validator + Zod (structured LLM output) |
+| Observability | OpenTelemetry SDK + prom-client (Prometheus) |
 
 ## Quick Start
 
 ```bash
 # 1. Copy environment
 cp .env.example .env
-# Fill in OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
+# Fill in: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
+# Redis (required for queue): REDIS_HOST=localhost, REDIS_PORT=6379, REDIS_PASSWORD=
 
-# 2. Start infrastructure
-docker-compose up -d postgres qdrant
+# 2. Start infrastructure (Postgres + Qdrant + Redis)
+docker-compose up -d
 
 # 3. Install and run
 npm install
@@ -113,9 +131,22 @@ open http://localhost:3000/docs
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/brands/:brandId/content/generate` | Start content job |
+| `POST` | `/api/v1/brands/:brandId/content/generate` | Enqueue content job (async) |
 | `GET` | `/api/v1/brands/:brandId/content` | List jobs |
 | `GET` | `/api/v1/brands/:brandId/content/:jobId` | Get job + result |
+
+### Evaluations
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/brands/:brandId/evaluations` | List evaluation records (`?limit=50`) |
+| `GET` | `/api/v1/brands/:brandId/evaluations/compare` | Compare two models (`?modelA=&modelB=`) |
+
+### Observability
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/metrics` | Prometheus metrics scrape endpoint |
 
 ### Streaming
 
@@ -249,10 +280,23 @@ Both `Deployment` resources (stable and canary) sit behind the same `Service`. O
 | `ANTHROPIC_API_KEY` | Anthropic Claude |
 | `GOOGLE_AI_API_KEY` | Google Gemini |
 | `PROMETHEUS_URL` | Internal Prometheus address (used by canary verification) |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis connection for BullMQ |
+| `OTLP_ENDPOINT` | OpenTelemetry collector endpoint |
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions — no configuration needed. Used for GHCR authentication and semantic-release.
 
 ---
+
+## Observability
+
+- **Traces**: OTLP HTTP → any collector (Jaeger, Tempo, Datadog). Auto-instrumented: HTTP, PostgreSQL, Redis.
+- **Metrics**: `GET /api/v1/metrics` returns Prometheus text format. Key metrics:
+  - `content_platform_llm_tokens_total` — token usage by provider/model/type
+  - `content_platform_llm_cost_usd_total` — estimated USD cost
+  - `content_platform_pipeline_latency_ms` — end-to-end pipeline duration by content type
+  - `content_platform_queue_depth` — current BullMQ queue depth
+  - `content_platform_evaluation_score` — composite quality scores by content type/model
+- **Correlation IDs**: `X-Correlation-ID` header is generated (or passed through) on every request, propagated to queue jobs, agent context, and SSE events.
 
 ## LLM Fallback Chain
 
