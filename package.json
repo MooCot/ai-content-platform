@@ -8,10 +8,13 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test": "jest --config jest.config.js",
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:cov": "jest --config jest.config.js --coverage",
+    "test:integration": "jest --config jest.integration.config.js",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:ai-eval": "jest --config jest.integration.config.js --testPathPattern='test/ai-eval'",
+    "test:all": "npm run test && npm run test:integration && npm run test:e2e",
     "format": "prettier --write \"src/**/*.ts\"",
     "prepare": "husky"
   },
@@ -50,6 +53,8 @@
     "prom-client": "^15.1.2"
   },
   "devDependencies": {
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2",
     "@nestjs/cli": "^10.3.2",
     "@nestjs/schematics": "^10.1.1",
     "@nestjs/testing": "^10.3.0",
@@ -88,12 +93,6 @@
     ]
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": { "^.+\\.(t|j)s$": "ts-jest" },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "projects": ["jest.config.js", "jest.integration.config.js"]
   }
 }
