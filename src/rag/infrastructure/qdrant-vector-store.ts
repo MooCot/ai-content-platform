@@ -62,7 +62,7 @@ export class QdrantVectorStore implements IVectorStore, OnModuleInit {
     const qdrantPoints = points.map((p) => ({
       id: p.id,
       vector: p.vector,
-      payload: p.payload,
+      payload: p.payload as unknown as Record<string, unknown>,
     }));
 
     await this.client.upsert(collectionName, {
@@ -90,7 +90,7 @@ export class QdrantVectorStore implements IVectorStore, OnModuleInit {
       chunkId: String(r.id),
       content: (r.payload as { content: string }).content,
       score: r.score,
-      metadata: r.payload as SearchResult['metadata'],
+      metadata: r.payload as unknown as SearchResult['metadata'],
     }));
   }
 

@@ -1,12 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Observable, Subject } from 'rxjs';
-import {
-  GoogleGenerativeAI,
-  HarmBlockThreshold,
-  HarmCategory,
-  Part,
-} from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, Part } from '@google/generative-ai';
 import {
   ILLMProvider,
   LLMCompletionRequest,
@@ -28,14 +23,18 @@ export class GeminiProvider implements ILLMProvider {
   private readonly safetySettings = [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    {
+      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
   ];
 
   constructor(private readonly config: ConfigService<AppConfig, true>) {
-    this.client = new GoogleGenerativeAI(
-      this.config.get('google.apiKey', { infer: true }),
-    );
+    this.client = new GoogleGenerativeAI(this.config.get('google.apiKey', { infer: true }));
     this.defaultModel = this.config.get('google.defaultModel', { infer: true });
   }
 
@@ -48,6 +47,13 @@ export class GeminiProvider implements ILLMProvider {
 
     const { history, lastUserMessage, systemInstruction } = this.buildChat(request);
 
+    // SDK 0.7.x types for startChat options and response differ across patches — cast to bypass
+    type UsageMeta = {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chat = model.startChat({
       history,
       systemInstruction,
@@ -56,12 +62,12 @@ export class GeminiProvider implements ILLMProvider {
         maxOutputTokens: request.maxTokens ?? 4096,
         responseMimeType: request.responseFormat === 'json' ? 'application/json' : 'text/plain',
       },
-    });
+    } as any); // eslint-disable-line
 
     const result = await chat.sendMessage(lastUserMessage);
     const response = result.response;
     const text = response.text();
-    const usageMeta = response.usageMetadata;
+    const usageMeta = (response as unknown as { usageMetadata?: UsageMeta }).usageMetadata;
 
     return {
       content: text,
@@ -87,6 +93,7 @@ export class GeminiProvider implements ILLMProvider {
         });
 
         const { history, lastUserMessage, systemInstruction } = this.buildChat(request);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const chat = model.startChat({
           history,
           systemInstruction,
@@ -94,7 +101,7 @@ export class GeminiProvider implements ILLMProvider {
             temperature: request.temperature ?? 0.7,
             maxOutputTokens: request.maxTokens ?? 4096,
           },
-        });
+        } as any); // eslint-disable-line
 
         const result = await chat.sendMessageStream(lastUserMessage);
 
@@ -102,8 +109,13 @@ export class GeminiProvider implements ILLMProvider {
           subject.next({ delta: chunk.text(), done: false });
         }
 
+        type UsageMeta = {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          totalTokenCount?: number;
+        };
         const final = await result.response;
-        const usage = final.usageMetadata;
+        const usage = (final as unknown as { usageMetadata?: UsageMeta }).usageMetadata;
         subject.next({
           delta: '',
           done: true,

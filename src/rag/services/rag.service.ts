@@ -8,16 +8,8 @@ import { TextSplitterService } from './text-splitter.service';
 import { DocumentParserService } from './document-parser.service';
 import { IVectorStore, VECTOR_STORE_TOKEN } from '../../common/interfaces/vector-store.interface';
 import { LLMRouterService } from '../../llm/llm-router.service';
-import {
-  BrandId,
-  DocumentId,
-  DocumentStatus,
-  SearchResult,
-} from '../../common/types/domain.types';
-import {
-  DocumentNotFoundException,
-  DocumentProcessingException,
-} from '../../common/exceptions/domain.exceptions';
+import { BrandId, DocumentId, DocumentStatus, SearchResult } from '../../common/types/domain.types';
+import { DocumentNotFoundException } from '../../common/exceptions/domain.exceptions';
 import { AppConfig } from '../../common/config/configuration';
 
 @Injectable()
@@ -116,12 +108,8 @@ export class RAGService {
   }
 
   /** Semantic search scoped to a brand's collection */
-  async search(
-    brandId: BrandId,
-    query: string,
-    limit?: number,
-  ): Promise<SearchResult[]> {
-    const searchLimit = limit ?? this.config.get('rag.searchLimit', { infer: true });
+  async search(brandId: BrandId, query: string, limit?: number): Promise<SearchResult[]> {
+    const searchLimit = limit ?? this.config.get('rag.searchLimit', { infer: true }) ?? 5;
     const [queryEmbedding] = await this.llmRouter.embed([query]);
 
     const collectionName = this.collectionName(brandId);
@@ -160,12 +148,9 @@ export class RAGService {
       // In a production scenario you'd store chunk IDs in the DB;
       // for now we use payload-filtered search with a large limit
       const [emptyVec] = await this.llmRouter.embed([doc.filename]);
-      const results = await this.vectorStore.search(
-        collectionName,
-        emptyVec,
-        10000,
-        { documentId: docId },
-      );
+      const results = await this.vectorStore.search(collectionName, emptyVec, 10000, {
+        documentId: docId,
+      });
       if (results.length) {
         await this.vectorStore.delete(
           collectionName,

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Observable, Subject } from 'rxjs';
 import Anthropic from '@anthropic-ai/sdk';
@@ -24,7 +24,6 @@ export class ClaudeProvider implements ILLMProvider {
 
   private readonly client: Anthropic;
   private readonly defaultModel: string;
-  private readonly logger = new Logger(ClaudeProvider.name);
 
   constructor(private readonly config: ConfigService<AppConfig, true>) {
     this.client = new Anthropic({
@@ -46,27 +45,39 @@ export class ClaudeProvider implements ILLMProvider {
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     };
 
-    if (request.tools?.length) {
-      params.tools = request.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.parameters as Anthropic.Tool['input_schema'],
-      }));
-    }
+    // Build final params — tools API exists at runtime but types vary across SDK patch versions
+    const finalParams = {
+      ...params,
+      ...(request.tools?.length
+        ? {
+            tools: request.tools.map((t) => ({
+              name: t.name,
+              description: t.description,
+              input_schema: t.parameters as Record<string, unknown>,
+            })),
+          }
+        : {}),
+    };
 
-    const response = await this.client.messages.create(params);
+    const response = await this.client.messages.create(
+      finalParams as Anthropic.MessageCreateParamsNonStreaming,
+    );
 
-    const toolCalls: LLMToolCall[] = response.content
-      .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+    // SDK 0.20.x types response.content as TextBlock[] — cast to access tool-use blocks at runtime
+    type AnyBlock = { type: string; id?: string; name?: string; input?: unknown; text?: string };
+    const blocks = response.content as unknown as AnyBlock[];
+
+    const toolCalls: LLMToolCall[] = blocks
+      .filter((b) => b.type === 'tool_use')
       .map((b) => ({
-        id: b.id,
-        name: b.name,
-        arguments: b.input as Record<string, unknown>,
+        id: b.id ?? '',
+        name: b.name ?? '',
+        arguments: (b.input ?? {}) as Record<string, unknown>,
       }));
 
-    const textContent = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
+    const textContent = blocks
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '')
       .join('');
 
     const usage: TokenUsage = {
@@ -101,10 +112,7 @@ export class ClaudeProvider implements ILLMProvider {
         });
 
         for await (const event of stream) {
-          if (
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta'
-          ) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             subject.next({ delta: event.delta.text, done: false });
           }
           if (event.type === 'message_stop') {
@@ -136,13 +144,8 @@ export class ClaudeProvider implements ILLMProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    try {
-      await this.client.models.list();
-      return true;
-    } catch {
-      this.logger.warn('Claude provider unavailable');
-      return false;
-    }
+    // SDK 0.20.x does not expose client.models — check API key presence instead
+    return Boolean(this.config.get('anthropic.apiKey', { infer: true }));
   }
 
   private buildSystemPrompt(request: LLMCompletionRequest): string {
@@ -150,8 +153,6 @@ export class ClaudeProvider implements ILLMProvider {
       .filter((m) => m.role === 'system')
       .map((m) => m.content)
       .join('\n');
-    return request.systemPrompt
-      ? `${request.systemPrompt}\n${systemMessages}`
-      : systemMessages;
+    return request.systemPrompt ? `${request.systemPrompt}\n${systemMessages}` : systemMessages;
   }
 }
