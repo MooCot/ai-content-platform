@@ -86,6 +86,7 @@ POST /brands/:id/content/generate
 | Streaming | Server-Sent Events (SSE) |
 | Validation | class-validator + Zod (structured LLM output) |
 | Observability | OpenTelemetry SDK + prom-client (Prometheus) |
+| Testing | Jest + Supertest · integration mocks · k6 load tests |
 
 ## Quick Start
 
@@ -198,6 +199,68 @@ curl -X POST http://localhost:3000/api/v1/brands/{brandId}/content/generate \
 curl -N http://localhost:3000/api/v1/stream/{jobId}
 ```
 
+## Testing
+
+### Running tests
+
+```bash
+npm run test               # unit tests (src/**/*.spec.ts)
+npm run test:cov           # unit tests + coverage report
+npm run test:integration   # integration tests (test/integration/)
+npm run test:e2e           # E2E tests via Supertest (test/e2e/)
+npm run test:ai-eval       # AI evaluation regression (test/ai-eval/)
+npm run test:all           # unit + integration + e2e in sequence
+
+# Single file
+npx jest src/llm/llm-router.service.spec.ts --no-coverage
+
+# Load tests (k6 required)
+k6 run --env BASE_URL=http://localhost:3000 --env BRAND_ID=<id> test/load/content-pipeline.k6.js
+```
+
+### Test layers
+
+| Layer | Location | Scope | External deps |
+|---|---|---|---|
+| Unit | `src/**/*.spec.ts` | Single service/class | All mocked |
+| Integration | `test/integration/` | Module composition, state machines | LLM/Qdrant/Redis mocked |
+| E2E | `test/e2e/` | Full HTTP API via Supertest | All mocked, real NestJS app |
+| AI Eval | `test/ai-eval/` | Semantic quality regression | Golden dataset thresholds |
+| Load | `test/load/` | Throughput, latency, queue backpressure | Requires running server |
+
+### Shared test infrastructure
+
+- **`test/mocks/llm-provider.mock.ts`** — `MockLLMProvider` with `createFlakyProvider(n)` / `createFailingProvider()` for retry/fallback scenarios
+- **`test/mocks/vector-store.mock.ts`** — In-memory `IVectorStore` with dot-product scoring and `getCollectionPoints()` for assertions
+- **`test/mocks/queue.mock.ts`** — `MockQueueService` that captures `enqueue()` calls; inspect with `getEnqueuedJobs()`
+- **`test/utils/repository.mock.ts`** — `createRepositoryMock<T>()` — TypeORM `jest.fn()` stubs
+- **`test/utils/mock-config.service.ts`** — `createMockConfigService()` delegates to the real `configuration()` factory
+- **`test/utils/test-app.factory.ts`** — `createTestApp()` boots the full `AppModule` with all external services swapped to mocks (no Docker needed for E2E)
+
+### Golden dataset (AI eval)
+
+`test/ai-eval/golden-dataset.ts` defines versioned quality thresholds per topic/content type:
+
+- Entries are **append-only** — never edit; set `disabled: true` to retire
+- Each entry specifies: required keywords, forbidden phrases, and min scores per dimension
+- Bump `PROMPT_VERSION` in `EvaluationService` and add new entries when prompts change
+- Set `EVAL_USE_REAL_LLM=true` to run against live providers (CI nightly only)
+
+### κ-invariants tested
+
+| Invariant | Test location |
+|---|---|
+| Agent pipeline order: PLANNER → RESEARCHER → GENERATOR → OPTIMIZER → QA | `agent-orchestrator.service.spec.ts` |
+| Brand isolation in DB queries and Qdrant collections | `rag.service.spec.ts`, `content.service.spec.ts`, `content-generation.e2e-spec.ts` |
+| RAG status machine: PENDING → CHUNKING → EMBEDDING → READY | `rag-pipeline.spec.ts` |
+| Job status machine: QUEUED → RUNNING → DONE\|FAILED\|CANCELLED\|RETRYING | `content-pipeline.spec.ts`, `content-pipeline.processor.spec.ts` |
+| Memory quality gate: `embedAndIndex()` only when composite ≥ 0.70 | `evaluation.service.spec.ts` |
+| Evaluation is fire-and-forget: `evaluate()` never throws | `evaluation.service.spec.ts` |
+| Embeddings only via OpenAI provider | `llm-router.service.spec.ts` |
+| Composite score ≥ threshold for every golden entry | `prompt-regression.spec.ts` |
+
+---
+
 ## CI/CD
 
 ### Pipeline
@@ -208,9 +271,11 @@ curl -N http://localhost:3000/api/v1/stream/{jobId}
 
 ```
 install
-   ├── lint        (parallel)
-   └── typecheck   (parallel)
-        └── test   (coverage artifact)
+   ├── lint            (parallel)
+   ├── typecheck       (parallel)
+   └── test:unit       (coverage artifact)
+        └── test:integration
+              └── test:e2e
 ```
 
 **`deploy.yml`** — triggers only on push to `master`:
