@@ -14,6 +14,7 @@ import { MemoryModule } from './memory/memory.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { QueueModule } from './queue/queue.module';
+import { ContractsModule } from './contracts';
 import { HealthController } from './common/health/health.controller';
 import { CorrelationIdMiddleware } from './observability/middleware/correlation-id.middleware';
 
@@ -77,6 +78,7 @@ import { EvaluationRecordEntity } from './evaluation/entities/evaluation-record.
     }),
 
     // ── Infrastructure & cross-cutting ───────────────────────────────────────
+    ContractsModule, // @Global — ContractRegistryService everywhere
     ObservabilityModule, // @Global — MetricsService + TracingService everywhere
     LLMModule,
     ToolsModule,

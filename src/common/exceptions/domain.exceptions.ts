@@ -29,15 +29,18 @@ export class LLMProviderExhaustedException extends HttpException {
 
 export class DocumentProcessingException extends HttpException {
   constructor(docId: string, reason: string) {
-    super(
-      `Document '${docId}' processing failed: ${reason}`,
-      HttpStatus.UNPROCESSABLE_ENTITY,
-    );
+    super(`Document '${docId}' processing failed: ${reason}`, HttpStatus.UNPROCESSABLE_ENTITY);
   }
 }
 
 export class StreamNotFoundException extends HttpException {
   constructor(streamId: string) {
     super(`Stream '${streamId}' not found`, HttpStatus.NOT_FOUND);
+  }
+}
+
+export class ContractViolationException extends HttpException {
+  constructor(contractName: string, issues: string) {
+    super(`Contract violation [${contractName}]: ${issues}`, HttpStatus.UNPROCESSABLE_ENTITY);
   }
 }
