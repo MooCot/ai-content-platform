@@ -5,6 +5,7 @@ import { MemoryEventEntity } from './entities/memory-event.entity';
 import { LLMRouterService } from '../llm/llm-router.service';
 import { AgentRole } from '../common/types/domain.types';
 import { createRepositoryMock } from '../../test/utils/repository.mock';
+import { ConfigService } from '@nestjs/config';
 import { createMockConfigService } from '../../test/utils/mock-config.service';
 
 // Qdrant client is instantiated inside the constructor — mock the whole module.
@@ -34,10 +35,10 @@ describe('MemoryService', () => {
         MemoryService,
         { provide: getRepositoryToken(MemoryEventEntity), useValue: repoMock },
         { provide: LLMRouterService, useValue: llmRouterMock },
-        { provide: 'ConfigService', useValue: createMockConfigService() },
+        { provide: ConfigService, useValue: createMockConfigService() },
       ],
     })
-      .overrideProvider('ConfigService')
+      .overrideProvider(ConfigService)
       .useValue(createMockConfigService())
       .compile();
 

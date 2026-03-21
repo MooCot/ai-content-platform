@@ -7,7 +7,7 @@ import { AgentOrchestratorService } from '../../agents/orchestrator/agent-orches
 import { StreamingService } from '../../streaming/streaming.service';
 import { EvaluationService } from '../../evaluation/evaluation.service';
 import { MetricsService } from '../../observability/metrics.service';
-import { JobStatus, ContentType } from '../../common/types/domain.types';
+import { JobStatus, ContentType, Tone } from '../../common/types/domain.types';
 import { createRepositoryMock } from '../../../test/utils/repository.mock';
 import { createBrandFixture } from '../../../test/fixtures/brand.fixture';
 import { Job } from 'bullmq';
@@ -33,7 +33,7 @@ function buildResult() {
     optimized: 'optimized',
     seoKeywords: ['kw'],
     readabilityScore: 75,
-    toneAnalysis: { detected: 'TECHNICAL' as const, confidence: 0.9, scores: {} as never },
+    toneAnalysis: { detected: Tone.TECHNICAL, confidence: 0.9, scores: {} as never },
     wordCount: 200,
     citations: [],
   };
@@ -96,9 +96,9 @@ describe('ContentPipelineProcessor', () => {
 
     it('transitions job status to DONE on success', async () => {
       await processor.process(buildJob() as Job);
-      const donePatch = repoMock.update.mock.calls.find(
-        ([, p]) => (p as { status: string }).status === JobStatus.DONE,
-      );
+      const donePatch = (
+        repoMock.update.mock.calls as unknown as Array<[string, { status: string }]>
+      ).find(([, p]) => p.status === JobStatus.DONE);
       expect(donePatch).toBeDefined();
     });
 
@@ -137,9 +137,9 @@ describe('ContentPipelineProcessor', () => {
         return buildResult();
       });
       await processor.process(buildJob() as Job);
-      const cancelledPatch = repoMock.update.mock.calls.find(
-        ([, p]) => (p as { status: string }).status === JobStatus.CANCELLED,
-      );
+      const cancelledPatch = (
+        repoMock.update.mock.calls as unknown as Array<[string, { status: string }]>
+      ).find(([, p]) => p.status === JobStatus.CANCELLED);
       expect(cancelledPatch).toBeDefined();
     });
   });
@@ -157,9 +157,9 @@ describe('ContentPipelineProcessor', () => {
       const job = buildJob({ attemptsMade: 3, opts: { attempts: 3 } }) as Job;
       processor.onFailed(job, new Error('permanent failure'));
 
-      const failedCall = repoMock.update.mock.calls.find(
-        ([, p]) => (p as { status: string }).status === JobStatus.FAILED,
-      );
+      const failedCall = (
+        repoMock.update.mock.calls as unknown as Array<[string, { status: string }]>
+      ).find(([, p]) => p.status === JobStatus.FAILED);
       expect(failedCall).toBeDefined();
       expect(streamingMock.emit).toHaveBeenCalledWith(
         'job-1',

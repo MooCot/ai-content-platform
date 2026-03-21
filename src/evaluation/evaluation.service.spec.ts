@@ -9,9 +9,10 @@ import { CompositeEvaluator } from './evaluators/composite.evaluator';
 import { MemoryService } from '../memory/memory.service';
 import { MetricsService } from '../observability/metrics.service';
 import { createRepositoryMock } from '../../test/utils/repository.mock';
+import { ConfigService } from '@nestjs/config';
 import { createMockConfigService } from '../../test/utils/mock-config.service';
 import { createAgentContextFixture } from '../../test/fixtures/agent-context.fixture';
-import { ContentType } from '../common/types/domain.types';
+import { ContentType, Tone } from '../common/types/domain.types';
 
 function buildResult(overrides = {}) {
   return {
@@ -19,7 +20,7 @@ function buildResult(overrides = {}) {
     optimized: 'Optimized content',
     seoKeywords: ['keyword'],
     readabilityScore: 75,
-    toneAnalysis: { detected: 'TECHNICAL' as const, confidence: 0.9, scores: {} as never },
+    toneAnalysis: { detected: Tone.TECHNICAL, confidence: 0.9, scores: {} as never },
     wordCount: 200,
     citations: ['source.pdf'],
     ...overrides,
@@ -73,10 +74,10 @@ describe('EvaluationService', () => {
         { provide: CompositeEvaluator, useValue: compositeMock },
         { provide: MemoryService, useValue: memoryMock },
         { provide: MetricsService, useValue: metricsMock },
-        { provide: 'ConfigService', useValue: createMockConfigService() },
+        { provide: ConfigService, useValue: createMockConfigService() },
       ],
     })
-      .overrideProvider('ConfigService')
+      .overrideProvider(ConfigService)
       .useValue(createMockConfigService())
       .compile();
 

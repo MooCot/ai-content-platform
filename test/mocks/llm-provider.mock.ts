@@ -1,4 +1,4 @@
-import { Observable, of } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   ILLMProvider,
   LLMCompletionRequest,
@@ -33,11 +33,17 @@ export class MockLLMProvider implements ILLMProvider {
     });
 
     this.streamImpl = (_req) =>
-      of(
-        { delta: 'Hello ', done: false },
-        { delta: 'world', done: false },
-        { delta: '', done: true, usage: DEFAULT_USAGE },
-      );
+      new Observable<LLMStreamChunk>((subscriber) => {
+        // Emit asynchronously: LLMRouterService uses a Subject, so the caller
+        // must subscribe before chunks arrive. Promise.resolve() schedules
+        // emission as a microtask, after subscribe() returns.
+        Promise.resolve().then(() => {
+          subscriber.next({ delta: 'Hello ', done: false });
+          subscriber.next({ delta: 'world', done: false });
+          subscriber.next({ delta: '', done: true, usage: DEFAULT_USAGE });
+          subscriber.complete();
+        });
+      });
 
     this.embedImpl = (texts) => texts.map(() => Array(1536).fill(0.1));
   }

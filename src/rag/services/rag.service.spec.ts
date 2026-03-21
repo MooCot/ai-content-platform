@@ -10,6 +10,7 @@ import { DocumentStatus } from '../../common/types/domain.types';
 import { DocumentNotFoundException } from '../../common/exceptions/domain.exceptions';
 import { MockVectorStore } from '../../../test/mocks/vector-store.mock';
 import { createRepositoryMock } from '../../../test/utils/repository.mock';
+import { ConfigService } from '@nestjs/config';
 import { createMockConfigService } from '../../../test/utils/mock-config.service';
 
 describe('RAGService', () => {
@@ -41,10 +42,10 @@ describe('RAGService', () => {
         { provide: DocumentParserService, useValue: documentParserMock },
         { provide: VECTOR_STORE_TOKEN, useValue: vectorStore },
         { provide: LLMRouterService, useValue: llmRouterMock },
-        { provide: 'ConfigService', useValue: createMockConfigService() },
+        { provide: ConfigService, useValue: createMockConfigService() },
       ],
     })
-      .overrideProvider('ConfigService')
+      .overrideProvider(ConfigService)
       .useValue(createMockConfigService())
       .compile();
 
@@ -90,9 +91,9 @@ describe('RAGService', () => {
       await new Promise((r) => setImmediate(r));
       await new Promise((r) => setImmediate(r));
 
-      const updateCalls = repoMock.update.mock.calls.map(
-        ([, patch]) => (patch as { status: string }).status,
-      );
+      const updateCalls = (
+        repoMock.update.mock.calls as unknown as Array<[string, { status: string }]>
+      ).map(([, patch]) => patch.status);
       expect(updateCalls).toContain(DocumentStatus.CHUNKING);
       expect(updateCalls).toContain(DocumentStatus.EMBEDDING);
       expect(updateCalls).toContain(DocumentStatus.READY);
@@ -114,9 +115,9 @@ describe('RAGService', () => {
       await new Promise((r) => setImmediate(r));
       await new Promise((r) => setImmediate(r));
 
-      const failCall = repoMock.update.mock.calls.find(
-        ([, patch]) => (patch as { status: string }).status === DocumentStatus.FAILED,
-      );
+      const failCall = (
+        repoMock.update.mock.calls as unknown as Array<[string, { status: string }]>
+      ).find(([, patch]) => patch.status === DocumentStatus.FAILED);
       expect(failCall).toBeDefined();
     });
   });

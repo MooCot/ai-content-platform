@@ -5,8 +5,7 @@
  * module boundary, but all NestJS module wiring is real.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { ContentService } from '../../src/content/content.service';
 import { ContentPipelineProcessor } from '../../src/queue/processors/content-pipeline.processor';
 import { AgentOrchestratorService } from '../../src/agents/orchestrator/agent-orchestrator.service';
@@ -16,12 +15,10 @@ import { EvaluationService } from '../../src/evaluation/evaluation.service';
 import { MetricsService } from '../../src/observability/metrics.service';
 import { QueueService } from '../../src/queue/queue.service';
 import { ContentJobEntity } from '../../src/content/entities/content-job.entity';
-import { configuration } from '../../src/common/config/configuration';
-import { ContentType, JobStatus } from '../../src/common/types/domain.types';
+import { ContentType, JobStatus, Tone } from '../../src/common/types/domain.types';
 import { createRepositoryMock } from '../utils/repository.mock';
 import { createBrandFixture } from '../fixtures/brand.fixture';
 import { createContentJobFixture } from '../fixtures/content-job.fixture';
-import { createAgentContextFixture } from '../fixtures/agent-context.fixture';
 import { MockQueueService } from '../mocks/queue.mock';
 import { Job } from 'bullmq';
 
@@ -31,7 +28,7 @@ function buildResult() {
     optimized: 'optimized content',
     seoKeywords: ['keyword'],
     readabilityScore: 78,
-    toneAnalysis: { detected: 'TECHNICAL' as const, confidence: 0.9, scores: {} as never },
+    toneAnalysis: { detected: Tone.TECHNICAL, confidence: 0.9, scores: {} as never },
     wordCount: 200,
     citations: ['source.pdf'],
   };
@@ -112,8 +109,8 @@ describe('ContentPipeline Integration', () => {
     await processor.process(buildBullJob() as Job);
 
     // Job updated to RUNNING, then DONE
-    const updateStatuses = jobRepoMock.update.mock.calls.map(
-      ([, p]) => (p as { status: string }).status,
+    const updateStatuses = (jobRepoMock.update.mock.calls as unknown as Array<[unknown, { status: string }]>).map(
+      ([, p]) => p.status,
     );
     expect(updateStatuses).toContain(JobStatus.RUNNING);
     expect(updateStatuses).toContain(JobStatus.DONE);
@@ -145,8 +142,8 @@ describe('ContentPipeline Integration', () => {
     // Final failure (attemptsMade=3) → FAILED + SSE error
     const finalJob = buildBullJob({ attemptsMade: 3 }) as Job;
     processor.onFailed(finalJob, new Error('permanent'));
-    const failedCall = jobRepoMock.update.mock.calls.find(
-      ([, p]) => (p as { status: string }).status === JobStatus.FAILED,
+    const failedCall = (jobRepoMock.update.mock.calls as unknown as Array<[unknown, { status: string }]>).find(
+      ([, p]) => p.status === JobStatus.FAILED,
     );
     expect(failedCall).toBeDefined();
     expect(streamingMock.emit).toHaveBeenCalledWith(

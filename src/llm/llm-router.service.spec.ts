@@ -10,6 +10,7 @@ import {
   createFailingProvider,
   MockLLMProvider,
 } from '../../test/mocks/llm-provider.mock';
+import { ConfigService } from '@nestjs/config';
 import { createMockConfigService } from '../../test/utils/mock-config.service';
 
 describe('LLMRouterService', () => {
@@ -22,10 +23,10 @@ describe('LLMRouterService', () => {
       providers: [
         LLMRouterService,
         { provide: LLM_PROVIDER_TOKEN, useValue: providers },
-        { provide: 'ConfigService', useValue: createMockConfigService() },
+        { provide: ConfigService, useValue: createMockConfigService() },
       ],
     })
-      .overrideProvider('ConfigService')
+      .overrideProvider(ConfigService)
       .useValue(createMockConfigService())
       .compile();
 
@@ -92,11 +93,8 @@ describe('LLMRouterService', () => {
         throw new Error('invalid request'); // not retryable
       };
 
-      await expect(
-        service.complete({ messages: [{ role: 'user', content: 'hi' }] }),
-      ).rejects.toBeDefined();
-
-      // Should attempt only once per provider (no retries for non-retryable)
+      // Falls through to OpenAI on non-retryable error — Claude must not be retried
+      await service.complete({ messages: [{ role: 'user', content: 'hi' }] });
       expect(calls.length).toBe(1);
     });
   });
