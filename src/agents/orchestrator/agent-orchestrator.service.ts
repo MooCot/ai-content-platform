@@ -7,14 +7,16 @@ import { OptimizerAgent } from '../agents/optimizer.agent';
 import { QAAgent } from '../agents/qa.agent';
 import { StreamingService } from '../../streaming/streaming.service';
 import { AgentRole, ContentResult } from '../../common/types/domain.types';
+import { ContentResultContractV1 } from '../../contracts';
+import { ContractViolationException } from '../../common/exceptions/domain.exceptions';
 
 // Per-agent timeout budgets (ms). Generator gets the most time because it streams.
 const AGENT_TIMEOUTS: Record<AgentRole, number> = {
-  [AgentRole.PLANNER]:    30_000,
+  [AgentRole.PLANNER]: 30_000,
   [AgentRole.RESEARCHER]: 20_000,
-  [AgentRole.GENERATOR]:  120_000,
-  [AgentRole.OPTIMIZER]:  60_000,
-  [AgentRole.QA]:         60_000,
+  [AgentRole.GENERATOR]: 120_000,
+  [AgentRole.OPTIMIZER]: 60_000,
+  [AgentRole.QA]: 60_000,
 };
 
 @Injectable()
@@ -42,11 +44,11 @@ export class AgentOrchestratorService {
     this.logger.log(`[${ctx.jobId}] Pipeline starting: ${this.pipeline.join(' → ')}`);
 
     const agents: Record<AgentRole, () => Promise<void>> = {
-      [AgentRole.PLANNER]:    () => this.planner.run(ctx),
+      [AgentRole.PLANNER]: () => this.planner.run(ctx),
       [AgentRole.RESEARCHER]: () => this.researcher.run(ctx),
-      [AgentRole.GENERATOR]:  () => this.generator.run(ctx),
-      [AgentRole.OPTIMIZER]:  () => this.optimizer.run(ctx),
-      [AgentRole.QA]:         () => this.qa.run(ctx),
+      [AgentRole.GENERATOR]: () => this.generator.run(ctx),
+      [AgentRole.OPTIMIZER]: () => this.optimizer.run(ctx),
+      [AgentRole.QA]: () => this.qa.run(ctx),
     };
 
     for (const role of this.pipeline) {
@@ -75,7 +77,7 @@ export class AgentOrchestratorService {
       });
     }
 
-    const result: ContentResult = {
+    const rawResult = {
       raw: ctx.draftContent,
       optimized: ctx.optimizedContent,
       seoKeywords: ctx.seoKeywords,
@@ -89,8 +91,17 @@ export class AgentOrchestratorService {
       citations: ctx.citations,
     };
 
+    // Contract gate: validate the assembled result before returning it to the
+    // processor. Catches schema drift between agents and the persistence layer.
+    const parsed = ContentResultContractV1.safeParse(rawResult);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      this.logger.error(`[${ctx.jobId}] ContentResult contract violation: ${issues}`);
+      throw new ContractViolationException('ContentResultV1', issues);
+    }
+
     this.logger.log(`[${ctx.jobId}] Pipeline complete`);
-    return result;
+    return parsed.data as ContentResult;
   }
 
   private withTimeout(role: AgentRole, task: Promise<void>): Promise<void> {
@@ -98,10 +109,7 @@ export class AgentOrchestratorService {
     return Promise.race([
       task,
       new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`${role} agent timed out after ${ms / 1000}s`)),
-          ms,
-        ),
+        setTimeout(() => reject(new Error(`${role} agent timed out after ${ms / 1000}s`)), ms),
       ),
     ]);
   }

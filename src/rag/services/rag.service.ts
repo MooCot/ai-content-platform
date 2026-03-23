@@ -10,6 +10,7 @@ import { IVectorStore, VECTOR_STORE_TOKEN } from '../../common/interfaces/vector
 import { LLMRouterService } from '../../llm/llm-router.service';
 import { BrandId, DocumentId, DocumentStatus, SearchResult } from '../../common/types/domain.types';
 import { DocumentNotFoundException } from '../../common/exceptions/domain.exceptions';
+import { RetrievalResultContractV1 } from '../../contracts';
 import { AppConfig } from '../../common/config/configuration';
 
 @Injectable()
@@ -116,9 +117,30 @@ export class RAGService {
     const exists = await this.vectorStore.collectionExists(collectionName);
     if (!exists) return [];
 
-    return this.vectorStore.search(collectionName, queryEmbedding, searchLimit, {
+    const raw = await this.vectorStore.search(collectionName, queryEmbedding, searchLimit, {
       brandId,
     });
+
+    // Contract gate: filter out any malformed results from the vector store.
+    // Soft validation — a partial result set is preferable to a pipeline failure.
+    // Also enforces the brand isolation κ-invariant: drops any chunk whose
+    // metadata.brandId does not match the query brandId.
+    return raw.filter((item) => {
+      const parsed = RetrievalResultContractV1.safeParse(item);
+      if (!parsed.success) {
+        this.logger.warn(
+          `RAG result dropped — contract violation: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+        );
+        return false;
+      }
+      if (parsed.data.metadata.brandId !== brandId) {
+        this.logger.error(
+          `RAG result dropped — brand isolation violation: expected ${brandId}, got ${parsed.data.metadata.brandId}`,
+        );
+        return false;
+      }
+      return true;
+    }) as SearchResult[];
   }
 
   async listDocuments(brandId: BrandId): Promise<DocumentEntity[]> {

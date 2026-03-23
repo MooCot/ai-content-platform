@@ -12,6 +12,7 @@ import { AgentContext } from '../agents/context/agent-context';
 import { ContentResult, AgentRole } from '../common/types/domain.types';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../common/config/configuration';
+import { EvaluationResultContractV1 } from '../contracts';
 
 /** Semver hash of the current prompt set — bump when prompts change. */
 const PROMPT_VERSION = '1.0.0';
@@ -75,7 +76,7 @@ export class EvaluationService {
       const lastStep = ctx.steps[ctx.steps.length - 1];
       const modelId = lastStep?.modelUsed ?? 'unknown';
 
-      const record = this.evalRepo.create({
+      const payload = {
         jobId,
         brandId: ctx.brandId,
         contentType: ctx.contentType,
@@ -92,8 +93,21 @@ export class EvaluationService {
           factuality: { score: factualityScore, supportedClaims, totalClaims },
           readability: { score: readabilityScore },
         },
-      });
+      };
 
+      // Contract gate: validate evaluation payload before persisting.
+      // Catches score normalisation drift (e.g. score > 1 from a mis-weighted evaluator).
+      // Runs inside the try/catch so a violation logs and exits gracefully.
+      const contractCheck = EvaluationResultContractV1.safeParse(payload);
+      if (!contractCheck.success) {
+        const issues = contractCheck.error.issues
+          .map((i) => `${i.path.join('.')}: ${i.message}`)
+          .join('; ');
+        this.logger.error(`[${jobId}] Evaluation contract violation — record not saved: ${issues}`);
+        return;
+      }
+
+      const record = this.evalRepo.create(payload);
       await this.evalRepo.save(record);
 
       this.logger.log(

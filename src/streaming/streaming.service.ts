@@ -3,15 +3,19 @@ import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Subject, Subscription } from 'rxjs';
 import { AppConfig } from '../common/config/configuration';
-import { StreamNotFoundException } from '../common/exceptions/domain.exceptions';
+import {
+  StreamNotFoundException,
+  ContractViolationException,
+} from '../common/exceptions/domain.exceptions';
+import { SSEEventContractV1 } from '../contracts';
 
 export type SSEEventType =
-  | 'token'        // single token from LLM
-  | 'agent_start'  // agent step beginning
-  | 'agent_done'   // agent step completed
-  | 'job_done'     // full job completed
-  | 'error'        // error occurred
-  | 'heartbeat';   // keepalive
+  | 'token' // single token from LLM
+  | 'agent_start' // agent step beginning
+  | 'agent_done' // agent step completed
+  | 'job_done' // full job completed
+  | 'error' // error occurred
+  | 'heartbeat'; // keepalive
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -92,11 +96,25 @@ export class StreamingService {
     return subject;
   }
 
-  /** Push an event to a stream. */
+  /**
+   * Push an event to a stream.
+   *
+   * Contract gate: validates the event against SSEEventContractV1 before
+   * forwarding to the Subject. Invalid events throw ContractViolationException
+   * and are never written to the SSE wire — preserving stream integrity.
+   */
   emit(streamId: string, event: SSEEvent): void {
     const entry = this.streams.get(streamId);
     if (!entry) return;
-    entry.subject.next(event);
+
+    const result = SSEEventContractV1.safeParse(event);
+    if (!result.success) {
+      const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      this.logger.error(`[${streamId}] SSE contract violation — event blocked: ${issues}`);
+      throw new ContractViolationException('SSEEventV1', issues);
+    }
+
+    entry.subject.next(result.data as SSEEvent);
   }
 
   /** Cancel and close a stream. */
