@@ -1,16 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { z } from 'zod';
 import { LLMRouterService } from '../../llm/llm-router.service';
 import { AgentContext } from '../context/agent-context';
 import { AgentRole, LLMProvider, Tone } from '../../common/types/domain.types';
+import { PlannerOutputContractV1 } from '../../contracts';
 
-const PlannerOutputSchema = z.object({
-  outline: z.array(z.string()).min(3).max(10),
-  searchQueries: z.array(z.string()).min(2).max(8),
-  targetTone: z.nativeEnum(Tone),
-  wordCountTarget: z.number().int().min(200).max(5000),
-  keyMessages: z.array(z.string()),
-});
+// Canonical schema lives in contracts/v1/agents/planner.contract.ts
+const PlannerOutputSchema = PlannerOutputContractV1;
 
 @Injectable()
 export class PlannerAgent {
