@@ -34,6 +34,14 @@ Module       Module      Module       Module       Module     (metrics/tracing)
                   │        Infrastructure          │
                   │ PostgreSQL │ Qdrant │  Redis   │
                   └───────────────────────────────┘
+
+         ════════════════════════════════════════
+              Contract Layer  (src/contracts/)
+              Zod schemas enforced at every
+              module boundary — queue, SSE,
+              RAG results, agent outputs,
+              evaluation records.
+         ════════════════════════════════════════
 ```
 
 ### Agent Pipeline
@@ -84,7 +92,7 @@ POST /brands/:id/content/generate
 | Job queue | BullMQ 5 + Redis (ioredis) |
 | LLM providers | OpenAI (GPT-4o), Claude (claude-sonnet-4-6), Gemini 1.5 Pro |
 | Streaming | Server-Sent Events (SSE) |
-| Validation | class-validator + Zod (structured LLM output) |
+| Validation | class-validator + Zod (structured LLM output + contract layer) |
 | Observability | OpenTelemetry SDK + prom-client (Prometheus) |
 | Testing | Jest + Supertest · integration mocks · k6 load tests |
 
@@ -158,6 +166,8 @@ open http://localhost:3000/docs
 
 ### SSE Event Types
 
+All events are validated against `SSEEventContractV1` before reaching the wire. Invalid events throw `ContractViolationException` and are never emitted.
+
 ```
 event: agent_start   data: { "agent": "PLANNER" }
 event: token         data: { "delta": "Hello" }
@@ -198,6 +208,40 @@ curl -X POST http://localhost:3000/api/v1/brands/{brandId}/content/generate \
 # Stream the result
 curl -N http://localhost:3000/api/v1/stream/{jobId}
 ```
+
+## Contract Layer
+
+The system uses a versioned, runtime-validated contract layer (`src/contracts/`) that enforces strict boundaries at every module boundary. Data that does not conform to a contract never enters system state.
+
+### Domains
+
+| Domain | Contract | Location |
+|---|---|---|
+| Agent inputs/outputs | `PlannerInput/OutputContractV1`, `ResearcherInput/OutputContractV1`, etc. | `contracts/v1/agents/` |
+| Queue job payload | `ContentGenerationJobContractV1` | `contracts/v1/queue/` |
+| Pipeline result | `ContentResultContractV1` | `contracts/v1/queue/` |
+| SSE events | `SSEEventContractV1` (discriminated union) | `contracts/v1/events/` |
+| RAG results | `RetrievalResultContractV1`, `DocumentChunkContractV1` | `contracts/v1/rag/` |
+| Evaluation records | `EvaluationResultContractV1` | `contracts/v1/evaluation/` |
+
+### Enforcement modes
+
+| Mode | Used at | On violation |
+|---|---|---|
+| Hard reject | `QueueService.enqueue()`, `StreamingService.emit()`, `AgentOrchestratorService.run()` | Throws `ContractViolationException` (HTTP 422) |
+| Soft filter | `RAGService.search()` results | Drops invalid items, logs warning |
+| Soft exit | `EvaluationService.evaluate()` before DB save | Logs error, exits without persisting |
+
+### Schema evolution
+
+Contracts are **append-only**. To change a schema:
+
+1. Add `src/contracts/v2/<domain>/<name>.contract.ts`
+2. Export from `src/contracts/index.ts` alongside v1
+3. Dispatch on `_contractVersion` in the consumer
+4. Mark the v1 export `@deprecated` — remove only after all producers migrate
+
+`ContractRegistryService` (`@Global`) provides `validate()`, `validateSafe()`, and `filterValid()` for use anywhere in the application via DI. Schemas can also be imported directly without DI for pure validation.
 
 ## Testing
 
@@ -246,12 +290,13 @@ k6 run --env BASE_URL=http://localhost:3000 --env BRAND_ID=<id> test/load/conten
 - Bump `PROMPT_VERSION` in `EvaluationService` and add new entries when prompts change
 - Set `EVAL_USE_REAL_LLM=true` to run against live providers (CI nightly only)
 
-### κ-invariants tested
+### invariants tested
 
 | Invariant | Test location |
 |---|---|
 | Agent pipeline order: PLANNER → RESEARCHER → GENERATOR → OPTIMIZER → QA | `agent-orchestrator.service.spec.ts` |
 | Brand isolation in DB queries and Qdrant collections | `rag.service.spec.ts`, `content.service.spec.ts`, `content-generation.e2e-spec.ts` |
+| RAG brand isolation enforced at contract layer — mismatched chunks dropped | `rag.service.spec.ts` |
 | RAG status machine: PENDING → CHUNKING → EMBEDDING → READY | `rag-pipeline.spec.ts` |
 | Job status machine: QUEUED → RUNNING → DONE\|FAILED\|CANCELLED\|RETRYING | `content-pipeline.spec.ts`, `content-pipeline.processor.spec.ts` |
 | Memory quality gate: `embedAndIndex()` only when composite ≥ 0.70 | `evaluation.service.spec.ts` |

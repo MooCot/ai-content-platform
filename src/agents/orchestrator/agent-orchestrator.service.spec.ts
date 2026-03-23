@@ -45,7 +45,7 @@ describe('AgentOrchestratorService', () => {
     service = module.get(AgentOrchestratorService);
   });
 
-  // ── pipeline order (κ-invariant) ──────────────────────────────────────────
+  // ── pipeline order (invariant) ──────────────────────────────────────────
 
   it('executes agents in strict order: PLANNER → RESEARCHER → GENERATOR → OPTIMIZER → QA', async () => {
     const order: string[] = [];
