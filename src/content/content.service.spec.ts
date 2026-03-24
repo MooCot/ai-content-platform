@@ -117,7 +117,7 @@ describe('ContentService', () => {
       );
     });
 
-    it('scopes the query to the brandId (κ-invariant: brand isolation)', async () => {
+    it('scopes the query to the brandId (invariant: brand isolation)', async () => {
       repoMock.findOne.mockResolvedValue(null);
       await service.getJob('job-1', 'brand-1').catch(() => {});
       expect(repoMock.findOne).toHaveBeenCalledWith({
@@ -129,7 +129,7 @@ describe('ContentService', () => {
   // ── listJobs() ────────────────────────────────────────────────────────────
 
   describe('listJobs()', () => {
-    it('returns jobs scoped to the brandId (κ-invariant: brand isolation)', async () => {
+    it('returns jobs scoped to the brandId (invariant: brand isolation)', async () => {
       repoMock.find.mockResolvedValue([]);
       await service.listJobs('brand-1');
       expect(repoMock.find).toHaveBeenCalledWith(

@@ -139,7 +139,7 @@ describe('LLMRouterService', () => {
   // ── embed() ───────────────────────────────────────────────────────────────
 
   describe('embed()', () => {
-    it('delegates to the OpenAI provider (κ-invariant: only OpenAI embeds)', async () => {
+    it('delegates to the OpenAI provider (invariant: only OpenAI embeds)', async () => {
       const embedSpy = jest.spyOn(openaiMock, 'embed');
       await service.embed(['test text']);
       expect(embedSpy).toHaveBeenCalledWith(['test text']);

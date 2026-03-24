@@ -145,7 +145,7 @@ describe('Content Generation E2E', () => {
     });
   });
 
-  // ── Correlation ID propagation (κ-invariant) ─────────────────────────────
+  // ── Correlation ID propagation (invariant) ─────────────────────────────
 
   describe('Correlation ID', () => {
     it('uses the provided X-Correlation-ID header', async () => {

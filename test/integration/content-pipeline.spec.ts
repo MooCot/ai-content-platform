@@ -152,14 +152,14 @@ describe('ContentPipeline Integration', () => {
     );
   });
 
-  // ── Brand isolation (κ-invariant) ─────────────────────────────────────────
+  // ── Brand isolation (invariant) ─────────────────────────────────────────
 
   it('looks up brand by ID from the job data, not a hardcoded value', async () => {
     await processor.process(buildBullJob() as Job);
     expect(brandsServiceMock.findById).toHaveBeenCalledWith('brand-test-uuid');
   });
 
-  // ── Zombie-job cleanup on startup (κ-invariant) ────────────────────────────
+  // ── Zombie-job cleanup on startup (invariant) ────────────────────────────
 
   it('marks RUNNING jobs as FAILED on module init', async () => {
     jobRepoMock.update.mockResolvedValue({ affected: 2 } as never);

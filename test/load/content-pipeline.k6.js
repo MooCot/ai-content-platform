@@ -23,7 +23,7 @@ const jobCompletionTime   = new Trend('job_completion_time_ms',   true);
 const queueRejectRate     = new Rate('queue_reject_rate');
 const jobsCreated         = new Counter('jobs_created_total');
 
-// ── Thresholds (κ-stability targets) ─────────────────────────────────────────
+// ── Thresholds (stability targets) ─────────────────────────────────────────
 export const options = {
   scenarios: {
     baseline: {
@@ -52,7 +52,7 @@ export const options = {
     },
   },
   thresholds: {
-    // Error rate < 1% across all scenarios (κ-invariant)
+    // Error rate < 1% across all scenarios (invariant)
     'error_rate': ['rate<0.01'],
     // p99 queue acceptance latency < 500ms
     'job_queue_latency_ms': ['p(99)<500'],

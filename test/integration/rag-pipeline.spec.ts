@@ -104,7 +104,7 @@ describe('RAG Pipeline Integration', () => {
 
     const points = vectorStore.getCollectionPoints('brand_brand-scope');
     expect(points.length).toBeGreaterThan(0);
-    // κ-invariant: collection name is brand-scoped
+    // invariant: collection name is brand-scoped
     expect(vectorStore.getCollectionPoints('brand_other-brand')).toHaveLength(0);
   });
 
@@ -160,7 +160,7 @@ describe('RAG Pipeline Integration', () => {
     expect(results).toEqual([]);
   });
 
-  // ── κ-invariant: only READY docs are searchable ───────────────────────────
+  // ── invariant: only READY docs are searchable ───────────────────────────
 
   it('returns empty when collection does not exist (documents not yet READY)', async () => {
     // Collection never created = documents are still processing

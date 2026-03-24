@@ -52,7 +52,7 @@ describe('CompositeEvaluator', () => {
     expect(score).toBeLessThanOrEqual(1);
   });
 
-  it('produces a value >= 0.70 for high-quality inputs (κ-invariant: memory gate)', () => {
+  it('produces a value >= 0.70 for high-quality inputs (invariant: memory gate)', () => {
     // Simulate a high-quality generation — composite must exceed the 0.70 threshold
     const score = evaluator.score({
       relevance: 0.85,

@@ -125,7 +125,7 @@ describe('RAGService', () => {
   // ── search() ──────────────────────────────────────────────────────────────
 
   describe('search()', () => {
-    it('returns empty array when the collection does not exist (κ-invariant: brand isolation)', async () => {
+    it('returns empty array when the collection does not exist (invariant: brand isolation)', async () => {
       const results = await service.search('brand-new', 'query');
       expect(results).toEqual([]);
     });
@@ -151,7 +151,7 @@ describe('RAGService', () => {
       expect(Array.isArray(results)).toBe(true);
     });
 
-    it('uses the brand-scoped collection name (κ-invariant: brand isolation)', () => {
+    it('uses the brand-scoped collection name (invariant: brand isolation)', () => {
       expect(service.collectionName('brand-abc')).toBe('brand_brand-abc');
     });
   });
@@ -176,7 +176,7 @@ describe('RAGService', () => {
       );
     });
 
-    it('scopes lookup by both docId and brandId (κ-invariant: brand isolation)', async () => {
+    it('scopes lookup by both docId and brandId (invariant: brand isolation)', async () => {
       repoMock.findOne.mockResolvedValue(null);
       await service.getDocument('doc-1', 'brand-1').catch(() => {});
       expect(repoMock.findOne).toHaveBeenCalledWith({

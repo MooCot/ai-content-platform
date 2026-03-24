@@ -44,7 +44,7 @@ describe('PlannerAgent', () => {
     expect(ctx.targetTone).toBe(Tone.TECHNICAL);
   });
 
-  it('calls completeStructured with Claude as preferred provider (κ-invariant)', async () => {
+  it('calls completeStructured with Claude as preferred provider (invariant)', async () => {
     await agent.run(makeCtx());
     expect(llmRouterMock.completeStructured).toHaveBeenCalledWith(
       expect.anything(),

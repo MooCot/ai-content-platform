@@ -38,7 +38,7 @@ const EvaluationDimensionsContractV1 = z.object({
  * Contract for evaluation records persisted to Postgres and used for
  * A/B model comparison. All scores are normalised to [0, 1].
  *
- * κ-invariant: compositeScore must be derivable from individual scores.
+ * invariant: compositeScore must be derivable from individual scores.
  * Enforced at contract boundary — prevents stale/mismatched aggregates
  * from being persisted.
  *

@@ -123,7 +123,7 @@ export class RAGService {
 
     // Contract gate: filter out any malformed results from the vector store.
     // Soft validation — a partial result set is preferable to a pipeline failure.
-    // Also enforces the brand isolation κ-invariant: drops any chunk whose
+    // Also enforces the brand isolation invariant: drops any chunk whose
     // metadata.brandId does not match the query brandId.
     return raw.filter((item) => {
       const parsed = RetrievalResultContractV1.safeParse(item);

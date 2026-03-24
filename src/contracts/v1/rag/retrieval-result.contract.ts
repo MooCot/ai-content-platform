@@ -24,7 +24,7 @@ export type DocumentChunk = z.infer<typeof DocumentChunkContractV1>;
 /**
  * A single ranked result from semantic search.
  *
- * κ-invariant: brandId in metadata must match the query brandId.
+ * invariant: brandId in metadata must match the query brandId.
  * Enforced at the service layer by filtering invalid results
  * rather than throwing, to avoid degrading a partial result set.
  */

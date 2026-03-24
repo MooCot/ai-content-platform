@@ -8,8 +8,7 @@
  * By default this suite runs against MOCK LLM responses (deterministic).
  * Set EVAL_USE_REAL_LLM=true in env to run against live providers (CI nightly only).
  *
- * S-C-O-κ:
- *   κ-invariant tested: composite score >= threshold for every golden entry
+ * invariant tested: composite score >= threshold for every golden entry
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { EvaluationService } from '../../src/evaluation/evaluation.service';
@@ -45,9 +44,9 @@ describe('AI Evaluation — Golden Dataset Regression', () => {
     compositeEvaluator = new CompositeEvaluator(createMockConfigService());
   });
 
-  // ── Composite score threshold (κ-invariant) ────────────────────────────────
+  // ── Composite score threshold (invariant) ────────────────────────────────
 
-  describe('κ-invariant: composite score >= threshold for every golden entry', () => {
+  describe('invariant: composite score >= threshold for every golden entry', () => {
     for (const entry of getActiveEntries()) {
       it(`[${entry.id}] "${entry.topic}" — composite >= ${entry.thresholds.composite}`, () => {
         // Scores are set at threshold + 0.01 in mock mode to pass

@@ -86,7 +86,7 @@ describe('EvaluationService', () => {
 
   // ── evaluate() ────────────────────────────────────────────────────────────
 
-  describe('evaluate() — κ-invariant: fire-and-forget, never throws', () => {
+  describe('evaluate() — invariant: fire-and-forget, never throws', () => {
     it('runs all 4 dimension evaluators in parallel', async () => {
       await service.evaluate(createAgentContextFixture(), buildResult());
 
