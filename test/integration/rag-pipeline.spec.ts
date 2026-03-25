@@ -45,7 +45,9 @@ describe('RAG Pipeline Integration', () => {
         { provide: getRepositoryToken(DocumentEntity), useValue: repoMock },
         {
           provide: DocumentParserService,
-          useValue: { parse: jest.fn().mockResolvedValue({ text: SAMPLE_CONTENT, metadata: {} }) },
+          useValue: {
+            parse: jest.fn().mockResolvedValue({ text: SAMPLE_CONTENT, metadata: {} }),
+          } as unknown as DocumentParserService,
         },
         { provide: VECTOR_STORE_TOKEN, useValue: vectorStore     },
         { provide: LLMRouterService,   useValue: llmRouterMock   },
