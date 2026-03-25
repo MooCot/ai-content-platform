@@ -21,6 +21,10 @@ export const ContentResultContractV1 = z.object({
   toneAnalysis: ToneAnalysisContractV1,
   wordCount: z.number().int().min(0),
   citations: z.array(z.string()),
+  // Degradation telemetry — optional so existing payloads remain valid;
+  // default(false/[]) ensures the fields are always present in parsed output.
+  degraded: z.boolean().optional().default(false),
+  degradationReasons: z.array(z.string()).optional().default([]),
 });
 
 export type ContentResult = z.infer<typeof ContentResultContractV1>;

@@ -76,6 +76,15 @@ export const configuration = () => ({
       readability: 0.2,
     },
   },
+
+  resilience: {
+    /** BullMQ waiting+active+delayed jobs — triggers degraded mode above this depth. */
+    queueDepthThreshold: parseInt(process.env.QUEUE_DEPTH_THRESHOLD ?? '50', 10),
+    /** RAG search timeout (ms) — pipeline continues without context on expiry. */
+    ragTimeoutMs: parseInt(process.env.RAG_TIMEOUT_MS ?? '5000', 10),
+    /** End-to-end latency budget (ms) — optional agents are skipped when exceeded. */
+    latencyBudgetMs: parseInt(process.env.PIPELINE_LATENCY_BUDGET_MS ?? '90000', 10),
+  },
 });
 
 export type AppConfig = ReturnType<typeof configuration>;

@@ -111,6 +111,9 @@ export interface ContentResult {
   toneAnalysis: ToneAnalysis;
   wordCount: number;
   citations: string[];
+  /** Present when the pipeline ran in degraded mode; absent on clean runs. */
+  degraded?: boolean;
+  degradationReasons?: string[];
 }
 
 export interface ChunkMetadata {
