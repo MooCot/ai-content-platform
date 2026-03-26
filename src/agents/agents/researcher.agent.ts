@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { RAGService } from '../../rag/services/rag.service';
 import { MemoryService } from '../../memory/memory.service';
 import { AgentContext } from '../context/agent-context';
 import { AgentRole, SearchResult } from '../../common/types/domain.types';
+import { DegradationService } from '../../resilience/degradation.service';
 
 @Injectable()
 export class ResearcherAgent {
@@ -11,6 +12,7 @@ export class ResearcherAgent {
   constructor(
     private readonly ragService: RAGService,
     private readonly memory: MemoryService,
+    @Optional() private readonly degradationService?: DegradationService,
   ) {}
 
   async run(ctx: AgentContext): Promise<void> {
@@ -40,17 +42,43 @@ export class ResearcherAgent {
       return;
     }
 
-    // Run all queries in parallel
-    const allResults = await Promise.all(
-      ctx.searchQueries.map((q) =>
-        this.ragService.search(ctx.brandId, q, 5).catch(() => [] as SearchResult[]),
+    // ── RAG search with configurable timeout ────────────────────────────────
+    // If the vector store is slow or unavailable, we continue without context
+    // rather than blocking or failing the pipeline.
+    const ragTimeout = this.degradationService?.ragTimeout ?? 5_000;
+
+    const ragResults = await Promise.race([
+      Promise.all(
+        ctx.searchQueries.map((q) =>
+          this.ragService.search(ctx.brandId, q, 5).catch(() => [] as SearchResult[]),
+        ),
       ),
-    );
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ragTimeout)),
+    ]);
+
+    if (ragResults === null) {
+      this.logger.warn(
+        `[${ctx.jobId}] RAG search timed out after ${ragTimeout}ms — continuing without context`,
+      );
+      ctx.degradation.append('rag_timeout');
+      ctx.ragContext = [];
+      ctx.citations = [];
+
+      ctx.recordStep({
+        agent: AgentRole.RESEARCHER,
+        input: { queries: ctx.searchQueries },
+        output: { chunkCount: 0, citations: [], timedOut: true },
+        modelUsed: 'rag',
+        durationMs: ragTimeout,
+        tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      });
+      return;
+    }
 
     // Deduplicate by chunkId
     const seen = new Set<string>();
     const deduped: SearchResult[] = [];
-    for (const results of allResults) {
+    for (const results of ragResults) {
       for (const r of results) {
         if (!seen.has(r.chunkId) && r.score > 0.7) {
           seen.add(r.chunkId);

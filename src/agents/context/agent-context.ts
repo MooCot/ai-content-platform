@@ -8,6 +8,7 @@ import {
   Tone,
 } from '../../common/types/domain.types';
 import { BrandConfig } from '../../brands/entities/brand.entity';
+import { DegradedExecutionContext } from '../../resilience/degraded-execution-context';
 
 /** Shared mutable context threaded through the agent pipeline. */
 export class AgentContext {
@@ -17,6 +18,9 @@ export class AgentContext {
   readonly topic: string;
   readonly contentType: ContentType;
   readonly steps: AgentStep[] = [];
+
+  /** Accumulates degradation reasons as the pipeline runs. Append-only. */
+  readonly degradation = new DegradedExecutionContext();
 
   // Populated by PlannerAgent
   outline: string[] = [];
