@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Observable, Subject } from 'rxjs';
-import { z, ZodSchema } from 'zod';
+import { ZodSchema } from 'zod';
 import {
   ILLMProvider,
   LLM_PROVIDER_TOKEN,
@@ -19,6 +19,13 @@ export interface RouterOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Called when the router falls back to a non-preferred provider.
+   * Agents pass `() => ctx.degradation.append('llm_fallback')` here so
+   * the pipeline can track provider switches without coupling the router
+   * to the agent pipeline.
+   */
+  onFallback?: (provider: LLMProvider) => void;
 }
 
 @Injectable()
@@ -49,9 +56,15 @@ export class LLMRouterService {
     const chain = this.buildChain(options.preferredProvider);
     const tried: string[] = [];
 
-    for (const providerKey of chain) {
+    for (let chainIdx = 0; chainIdx < chain.length; chainIdx++) {
+      const providerKey = chain[chainIdx];
       const provider = this.providerMap.get(providerKey);
       if (!provider) continue;
+
+      // Notify caller that we fell back to a non-preferred provider
+      if (chainIdx > 0) {
+        options.onFallback?.(providerKey);
+      }
 
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         try {
@@ -64,9 +77,7 @@ export class LLMRouterService {
           });
         } catch (err) {
           const isRetryable = this.isRetryableError(err);
-          this.logger.warn(
-            `${providerKey} attempt ${attempt} failed: ${String(err)}`,
-          );
+          this.logger.warn(`${providerKey} attempt ${attempt} failed: ${String(err)}`);
 
           if (!isRetryable || attempt === this.maxRetries) break;
           await this.delay(this.retryDelayMs * attempt);
@@ -86,9 +97,14 @@ export class LLMRouterService {
     const tried: string[] = [];
 
     void (async () => {
-      for (const providerKey of chain) {
+      for (let chainIdx = 0; chainIdx < chain.length; chainIdx++) {
+        const providerKey = chain[chainIdx];
         const provider = this.providerMap.get(providerKey);
         if (!provider) continue;
+
+        if (chainIdx > 0) {
+          options.onFallback?.(providerKey);
+        }
 
         try {
           await new Promise<void>((resolve, reject) => {
@@ -134,16 +150,15 @@ export class LLMRouterService {
     schema: ZodSchema<T>,
     options: RouterOptions = {},
   ): Promise<T> {
-    const response = await this.complete(
-      { ...request, responseFormat: 'json' },
-      options,
-    );
+    const response = await this.complete({ ...request, responseFormat: 'json' }, options);
 
     try {
       const parsed: unknown = JSON.parse(response.content);
       return schema.parse(parsed);
     } catch (err) {
-      throw new Error(`LLM structured output parse failed: ${String(err)}\nRaw: ${response.content}`);
+      throw new Error(
+        `LLM structured output parse failed: ${String(err)}\nRaw: ${response.content}`,
+      );
     }
   }
 

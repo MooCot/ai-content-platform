@@ -43,7 +43,10 @@ Return only valid JSON.`,
         ],
       },
       PlannerOutputSchema,
-      { preferredProvider: LLMProvider.CLAUDE },
+      {
+        preferredProvider: LLMProvider.CLAUDE,
+        onFallback: () => ctx.degradation.append('llm_fallback'),
+      },
     );
 
     ctx.outline = result.outline;

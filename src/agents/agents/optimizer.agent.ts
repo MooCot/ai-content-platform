@@ -78,7 +78,10 @@ Return JSON with:
         ],
       },
       OptimizedOutputSchema,
-      { preferredProvider: LLMProvider.OPENAI },
+      {
+        preferredProvider: LLMProvider.OPENAI,
+        onFallback: () => ctx.degradation.append('llm_fallback'),
+      },
     );
 
     ctx.optimizedContent = result.optimizedContent;

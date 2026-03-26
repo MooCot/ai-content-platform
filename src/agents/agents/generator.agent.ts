@@ -44,7 +44,10 @@ Write the full content now. Do not add meta-commentary. Write directly.`;
         messages: [{ role: 'user', content: prompt }],
         maxTokens: ctx.brandConfig.maxContentLength * 2,
       },
-      { preferredProvider: LLMProvider.CLAUDE },
+      {
+        preferredProvider: LLMProvider.CLAUDE,
+        onFallback: () => ctx.degradation.append('llm_fallback'),
+      },
     );
 
     let fullContent = '';

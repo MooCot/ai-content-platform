@@ -70,7 +70,10 @@ Return JSON with:
         ],
       },
       QAOutputSchema,
-      { preferredProvider: LLMProvider.CLAUDE },
+      {
+        preferredProvider: LLMProvider.CLAUDE,
+        onFallback: () => ctx.degradation.append('llm_fallback'),
+      },
     );
 
     ctx.finalContent = result.finalContent;
