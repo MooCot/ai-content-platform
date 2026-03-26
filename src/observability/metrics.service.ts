@@ -24,6 +24,9 @@ export class MetricsService implements OnModuleInit {
   // ── Evaluation ───────────────────────────────────────────────────────────────
   private readonly evaluationScore: Histogram<string>;
 
+  // ── Resilience ───────────────────────────────────────────────────────────────
+  private readonly degradedTotal: Counter<string>;
+
   constructor() {
     const reg = this.registry;
 
@@ -92,6 +95,13 @@ export class MetricsService implements OnModuleInit {
       buckets: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
       registers: [reg],
     });
+
+    this.degradedTotal = new Counter({
+      name: `${NS}_degraded_total`,
+      help: 'Total pipeline executions that entered degraded mode, labelled by reason',
+      labelNames: ['reason'],
+      registers: [reg],
+    });
   }
 
   onModuleInit(): void {
@@ -147,6 +157,10 @@ export class MetricsService implements OnModuleInit {
       { brand_id: brandId, content_type: contentType, model_id: modelId },
       score,
     );
+  }
+
+  recordDegradation(reason: string): void {
+    this.degradedTotal.inc({ reason });
   }
 
   async getMetrics(): Promise<string> {

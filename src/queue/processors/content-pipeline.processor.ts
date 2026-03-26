@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
@@ -12,6 +12,8 @@ import { MetricsService } from '../../observability/metrics.service';
 import { AgentContext } from '../../agents/context/agent-context';
 import { ContentType, JobStatus } from '../../common/types/domain.types';
 import { CONTENT_PIPELINE_QUEUE, ContentPipelineJobData } from '../queue.constants';
+import { QueueService } from '../queue.service';
+import { DegradationService } from '../../resilience/degradation.service';
 
 @Processor(CONTENT_PIPELINE_QUEUE, { concurrency: 5 })
 export class ContentPipelineProcessor extends WorkerHost {
@@ -25,6 +27,9 @@ export class ContentPipelineProcessor extends WorkerHost {
     private readonly streaming: StreamingService,
     private readonly evaluation: EvaluationService,
     private readonly metrics: MetricsService,
+    // Optional so existing unit tests that don't wire these services still pass
+    @Optional() private readonly queueService?: QueueService,
+    @Optional() private readonly degradationService?: DegradationService,
   ) {
     super();
   }
@@ -48,9 +53,24 @@ export class ContentPipelineProcessor extends WorkerHost {
       correlationId,
     });
 
+    // Queue overload check — mark context degraded before the pipeline starts
+    // so the orchestrator can skip optional agents without being aware of BullMQ.
+    if (this.queueService && this.degradationService) {
+      const depth = await this.queueService.getDepth();
+      if (this.degradationService.isQueueOverloaded(depth)) {
+        this.logger.warn(`[${jobId}] Queue overloaded (depth=${depth}) — entering degraded mode`);
+        ctx.degradation.append('queue_overload');
+      }
+    }
+
     const pipelineStart = Date.now();
     const result = await this.orchestrator.run(ctx);
     const durationMs = Date.now() - pipelineStart;
+
+    // Emit one Prometheus increment per degradation reason accumulated during the run
+    for (const reason of ctx.degradation.reasons) {
+      this.metrics.recordDegradation(reason);
+    }
 
     // TypeORM _QueryDeepPartialEntity doesn't handle JSONB Record fields — cast to bypass
     await this.jobRepo.update(jobId, {
