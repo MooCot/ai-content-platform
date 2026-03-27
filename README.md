@@ -42,6 +42,14 @@ Module       Module      Module       Module       Module     (metrics/tracing)
               RAG results, agent outputs,
               evaluation records.
          ════════════════════════════════════════
+
+         ════════════════════════════════════════
+              Resilience Layer (src/resilience/)
+              DegradedExecutionContext threaded
+              through every pipeline run.
+              System degrades quality, not
+              availability.
+         ════════════════════════════════════════
 ```
 
 ### Agent Pipeline
@@ -68,14 +76,16 @@ POST /brands/:id/content/generate
     (draft content)
           │
           ▼
-    OptimizerAgent         ← OpenAI + SEO/Tone tools
+    OptimizerAgent  [optional] ← OpenAI + SEO/Tone tools
     (optimized content, keywords)
+    ↑ skipped if degraded or latency budget exceeded
           │
           ▼
-    QAAgent                ← Claude + Readability tool
+    QAAgent         [optional] ← Claude + Readability tool
     (final content, quality score)
+    ↑ skipped if degraded or latency budget exceeded
           │
-          ├─► SSE: job_done event
+          ├─► SSE: job_done event  (result includes degraded + degradationReasons)
           │
           └─► EvaluationService (fire-and-forget)
                 relevance + tone + factuality → composite score
@@ -209,6 +219,71 @@ curl -X POST http://localhost:3000/api/v1/brands/{brandId}/content/generate \
 curl -N http://localhost:3000/api/v1/stream/{jobId}
 ```
 
+## System Degradation Modes
+
+The platform treats degradation as a **first-class system behavior** — availability is preserved even when individual components are slow or unavailable. A `DegradedExecutionContext` is attached to every pipeline run and accumulates reasons as they occur. The final `ContentResult` carries `degraded: boolean` and `degradationReasons: string[]` so clients can choose how to surface partial quality.
+
+### Degradation reasons
+
+| Reason | Trigger | Effect |
+|---|---|---|
+| `queue_overload` | BullMQ depth ≥ `QUEUE_DEPTH_THRESHOLD` (default 50) at job start | Optional agents skipped immediately |
+| `rag_timeout` | RAG search exceeds `RAG_TIMEOUT_MS` (default 5 s) | Pipeline continues without retrieval context |
+| `llm_fallback` | LLM router switches to a non-preferred provider | Logged; pipeline continues |
+| `contract_retry` | Optional agent output fails schema validation on first attempt | Agent retried once |
+| `optional_agent_skipped` | Optional agent fails on both attempts, or pipeline already degraded | `optimized` falls back to `raw`; `finalContent` falls back through the chain |
+
+### Optional vs required agents
+
+| Agent | Required? | On failure |
+|---|---|---|
+| `PlannerAgent` | Yes | Job marked `FAILED` |
+| `ResearcherAgent` | Yes | Job marked `FAILED` (RAG timeout is a soft fallback within the agent) |
+| `GeneratorAgent` | Yes | Job marked `FAILED` |
+| `OptimizerAgent` | **Optional** | Single retry → degraded continue |
+| `QAAgent` | **Optional** | Single retry → degraded continue |
+
+### Content fallbacks
+
+When optional agents are skipped, the result is assembled from whatever was produced:
+
+```
+finalContent   = ctx.finalContent    (QA output)
+             || ctx.optimizedContent (Optimizer output)
+             || ctx.draftContent     (Generator output — always present)
+
+optimized      = ctx.optimizedContent || ctx.draftContent
+wordCount      = derived from finalContent
+```
+
+### Skip conditions
+
+Optional agents are skipped when **either** condition holds:
+- `ctx.degradation.isDegraded` — any prior reason was appended (queue overload, RAG timeout, etc.)
+- `DegradationService.isLatencyBudgetExceeded(elapsed)` — wall time since pipeline start exceeds `PIPELINE_LATENCY_BUDGET_MS` (default 90 s)
+
+### Degradation metrics
+
+```
+content_platform_degraded_total{reason="queue_overload"}
+content_platform_degraded_total{reason="rag_timeout"}
+content_platform_degraded_total{reason="llm_fallback"}
+content_platform_degraded_total{reason="contract_retry"}
+content_platform_degraded_total{reason="optional_agent_skipped"}
+```
+
+Each label is incremented once per pipeline run where that reason occurred. The ratio of degraded pipelines can be derived by summing over reasons and dividing by `content_platform_pipeline_latency_ms_count`.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `QUEUE_DEPTH_THRESHOLD` | `50` | BullMQ waiting+active jobs that triggers overload |
+| `RAG_TIMEOUT_MS` | `5000` | Vector search timeout before `rag_timeout` fires |
+| `PIPELINE_LATENCY_BUDGET_MS` | `90000` | Optional agents skipped after this many ms |
+
+---
+
 ## Contract Layer
 
 The system uses a versioned, runtime-validated contract layer (`src/contracts/`) that enforces strict boundaries at every module boundary. Data that does not conform to a contract never enters system state.
@@ -295,6 +370,7 @@ k6 run --env BASE_URL=http://localhost:3000 --env BRAND_ID=<id> test/load/conten
 | Invariant | Test location |
 |---|---|
 | Agent pipeline order: PLANNER → RESEARCHER → GENERATOR → OPTIMIZER → QA | `agent-orchestrator.service.spec.ts` |
+| Optional agents skipped when degraded; all 5 run on a clean pipeline | `agent-orchestrator.service.spec.ts` |
 | Brand isolation in DB queries and Qdrant collections | `rag.service.spec.ts`, `content.service.spec.ts`, `content-generation.e2e-spec.ts` |
 | RAG brand isolation enforced at contract layer — mismatched chunks dropped | `rag.service.spec.ts` |
 | RAG status machine: PENDING → CHUNKING → EMBEDDING → READY | `rag-pipeline.spec.ts` |
@@ -406,6 +482,7 @@ Both `Deployment` resources (stable and canary) sit behind the same `Service`. O
   - `content_platform_pipeline_latency_ms` — end-to-end pipeline duration by content type
   - `content_platform_queue_depth` — current BullMQ queue depth
   - `content_platform_evaluation_score` — composite quality scores by content type/model
+  - `content_platform_degraded_total{reason}` — degradation event counts by reason
 - **Correlation IDs**: `X-Correlation-ID` header is generated (or passed through) on every request, propagated to queue jobs, agent context, and SSE events.
 
 ## LLM Fallback Chain
