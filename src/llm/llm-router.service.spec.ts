@@ -157,6 +157,75 @@ describe('LLMRouterService', () => {
     });
   });
 
+  // ── onFallback callback ───────────────────────────────────────────────────
+
+  describe('onFallback callback', () => {
+    it('complete(): does NOT call onFallback when preferred provider succeeds', async () => {
+      const onFallback = jest.fn();
+      await service.complete(
+        { messages: [{ role: 'user', content: 'hello' }] },
+        { preferredProvider: LLMProvider.CLAUDE, onFallback },
+      );
+      expect(onFallback).not.toHaveBeenCalled();
+    });
+
+    it('complete(): calls onFallback with the fallback provider key when falling back', async () => {
+      const flakyClaudeForever = createFailingProvider(LLMProvider.CLAUDE, 'unavailable');
+      await buildModule([flakyClaudeForever, openaiMock]);
+
+      const onFallback = jest.fn();
+      await service.complete(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        { preferredProvider: LLMProvider.CLAUDE, onFallback },
+      );
+
+      expect(onFallback).toHaveBeenCalledTimes(1);
+      expect(onFallback).toHaveBeenCalledWith(LLMProvider.OPENAI);
+    });
+
+    it('complete(): onFallback is optional — no error when omitted', async () => {
+      const failingClaude = createFailingProvider(LLMProvider.CLAUDE, 'error');
+      await buildModule([failingClaude, openaiMock]);
+
+      // No onFallback in options
+      await expect(
+        service.complete({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).resolves.toBeDefined();
+    });
+
+    it('stream(): does NOT call onFallback when preferred provider streams successfully', (done) => {
+      const onFallback = jest.fn();
+      service.stream({ messages: [{ role: 'user', content: 'hello' }] }, { onFallback }).subscribe({
+        complete: () => {
+          expect(onFallback).not.toHaveBeenCalled();
+          done();
+        },
+        error: done,
+      });
+    });
+
+    it('stream(): calls onFallback when streaming falls back to a second provider', (done) => {
+      claudeMock.streamImpl = () => {
+        throw new Error('503 stream unavailable');
+      };
+
+      const onFallback = jest.fn();
+      service
+        .stream(
+          { messages: [{ role: 'user', content: 'hello' }] },
+          { preferredProvider: LLMProvider.CLAUDE, onFallback },
+        )
+        .subscribe({
+          complete: () => {
+            expect(onFallback).toHaveBeenCalledTimes(1);
+            expect(onFallback).toHaveBeenCalledWith(LLMProvider.OPENAI);
+            done();
+          },
+          error: done,
+        });
+    });
+  });
+
   // ── completeStructured() ──────────────────────────────────────────────────
 
   describe('completeStructured()', () => {
