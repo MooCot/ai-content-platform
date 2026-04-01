@@ -47,22 +47,21 @@ export class GeminiProvider implements ILLMProvider {
 
     const { history, lastUserMessage, systemInstruction } = this.buildChat(request);
 
-    // SDK 0.7.x types for startChat options and response differ across patches — cast to bypass
     type UsageMeta = {
       promptTokenCount?: number;
       candidatesTokenCount?: number;
       totalTokenCount?: number;
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chat = model.startChat({
       history,
-      systemInstruction,
+      ...(systemInstruction && {
+        systemInstruction: { role: 'user', parts: [{ text: systemInstruction }] },
+      }),
       generationConfig: {
         temperature: request.temperature ?? 0.7,
         maxOutputTokens: request.maxTokens ?? 4096,
-        responseMimeType: request.responseFormat === 'json' ? 'application/json' : 'text/plain',
       },
-    } as any); // eslint-disable-line
+    });
 
     const result = await chat.sendMessage(lastUserMessage);
     const response = result.response;
@@ -93,15 +92,16 @@ export class GeminiProvider implements ILLMProvider {
         });
 
         const { history, lastUserMessage, systemInstruction } = this.buildChat(request);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const chat = model.startChat({
           history,
-          systemInstruction,
+          ...(systemInstruction && {
+            systemInstruction: { role: 'user', parts: [{ text: systemInstruction }] },
+          }),
           generationConfig: {
             temperature: request.temperature ?? 0.7,
             maxOutputTokens: request.maxTokens ?? 4096,
           },
-        } as any); // eslint-disable-line
+        });
 
         const result = await chat.sendMessageStream(lastUserMessage);
 
