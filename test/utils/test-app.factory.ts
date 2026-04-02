@@ -6,7 +6,9 @@
  */
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
+import { getQueueToken } from '@nestjs/bullmq';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../../src/app.module';
 import { BrandEntity } from '../../src/brands/entities/brand.entity';
 import { ContentJobEntity } from '../../src/content/entities/content-job.entity';
@@ -16,7 +18,9 @@ import { EvaluationRecordEntity } from '../../src/evaluation/entities/evaluation
 import { LLM_PROVIDER_TOKEN } from '../../src/common/interfaces/llm-provider.interface';
 import { VECTOR_STORE_TOKEN } from '../../src/common/interfaces/vector-store.interface';
 import { QueueService } from '../../src/queue/queue.service';
+import { ContentPipelineProcessor } from '../../src/queue/processors/content-pipeline.processor';
 import { MetricsService } from '../../src/observability/metrics.service';
+import { CONTENT_PIPELINE_QUEUE } from '../../src/queue/queue.constants';
 import { createRepositoryMock } from './repository.mock';
 import { createOpenAIProviderMock, createClaudeProviderMock, createGeminiProviderMock } from '../mocks/llm-provider.mock';
 import { MockVectorStore } from '../mocks/vector-store.mock';
@@ -27,6 +31,7 @@ export interface TestApp {
   brandRepo: ReturnType<typeof createRepositoryMock<BrandEntity>>;
   jobRepo: ReturnType<typeof createRepositoryMock<ContentJobEntity>>;
   docRepo: ReturnType<typeof createRepositoryMock<DocumentEntity>>;
+  evalRepo: ReturnType<typeof createRepositoryMock<EvaluationRecordEntity>>;
   vectorStore: MockVectorStore;
   queueService: MockQueueService;
 }
@@ -58,8 +63,23 @@ export async function createTestApp(): Promise<TestApp> {
     .useValue([createClaudeProviderMock(), createOpenAIProviderMock(), createGeminiProviderMock()])
     // ── Vector store ────────────────────────────────────────────────────────
     .overrideProvider(VECTOR_STORE_TOKEN).useValue(vectorStore)
-    // ── Queue ───────────────────────────────────────────────────────────────
+    // ── TypeORM DataSource (prevent Postgres connection in tests without Docker) ─
+    .overrideProvider(getDataSourceToken())
+    .useValue({
+      isInitialized: true,
+      destroy: jest.fn().mockResolvedValue(undefined),
+      manager: { transaction: jest.fn(), find: jest.fn(), findOne: jest.fn() },
+      getRepository: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource)
+    // ── Queue + BullMQ (prevent Redis connections in tests without Docker) ────
     .overrideProvider(QueueService).useValue(queueService)
+    .overrideProvider(getQueueToken(CONTENT_PIPELINE_QUEUE)).useValue({
+      add: jest.fn().mockResolvedValue({ id: 'mock-bull-job' }),
+      getJobCounts: jest.fn().mockResolvedValue({ waiting: 0, active: 0, completed: 0, failed: 0 }),
+      obliterate: jest.fn().mockResolvedValue(undefined),
+    })
+    // ── Processor (prevent BullMQ Worker from connecting to Redis) ────────────
+    .overrideProvider(ContentPipelineProcessor).useValue({})
     // ── Metrics (no-op to avoid prom-client registration conflicts) ─────────
     .overrideProvider(MetricsService).useValue({
       recordTokenUsage: jest.fn(),
@@ -79,5 +99,5 @@ export async function createTestApp(): Promise<TestApp> {
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   await app.init();
 
-  return { app, brandRepo, jobRepo, docRepo, vectorStore, queueService };
+  return { app, brandRepo, jobRepo, docRepo, evalRepo, vectorStore, queueService };
 }
