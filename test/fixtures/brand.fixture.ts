@@ -3,7 +3,7 @@ import { LLMProvider, Tone } from '../../src/common/types/domain.types';
 
 export function createBrandFixture(overrides: Partial<BrandEntity> = {}): BrandEntity {
   return {
-    id: 'brand-test-uuid',
+    id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     slug: 'test-brand',
     name: 'Test Brand',
     config: {

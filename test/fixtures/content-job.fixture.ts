@@ -5,8 +5,8 @@ export function createContentJobFixture(
   overrides: Partial<ContentJobEntity> = {},
 ): ContentJobEntity {
   return {
-    id: 'job-test-uuid',
-    brandId: 'brand-test-uuid',
+    id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+    brandId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     topic: 'Introduction to Vector Databases',
     contentType: ContentType.BLOG,
     status: JobStatus.QUEUED,
