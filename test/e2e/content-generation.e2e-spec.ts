@@ -41,7 +41,7 @@ describe('Content Generation E2E', () => {
         .send(dto)
         .expect(201);
 
-      expect(res.body).toHaveProperty('id');
+      expect(res.body).toHaveProperty('jobId');
       expect(res.body.status).toBe(JobStatus.QUEUED);
     });
 
@@ -59,7 +59,7 @@ describe('Content Generation E2E', () => {
     it('returns 404 when brand does not exist', async () => {
       testApp.brandRepo.findOne.mockResolvedValue(null);
       await request(app.getHttpServer())
-        .post('/api/v1/brands/nonexistent/content/generate')
+        .post('/api/v1/brands/c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13/content/generate')
         .send(dto)
         .expect(404);
     });
@@ -121,14 +121,15 @@ describe('Content Generation E2E', () => {
     it('returns 404 for an unknown jobId', async () => {
       testApp.jobRepo.findOne.mockResolvedValue(null);
       await request(app.getHttpServer())
-        .get(`/api/v1/brands/${brand.id}/content/unknown-job`)
+        .get(`/api/v1/brands/${brand.id}/content/e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15`)
         .expect(404);
     });
 
     it('is brand-scoped — same jobId under different brand returns 404', async () => {
       testApp.jobRepo.findOne.mockResolvedValue(null); // job not found for this brand
+      const job = createContentJobFixture({ status: JobStatus.DONE });
       await request(app.getHttpServer())
-        .get(`/api/v1/brands/other-brand/content/job-test-uuid`)
+        .get(`/api/v1/brands/d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14/content/${job.id}`)
         .expect(404);
     });
   });

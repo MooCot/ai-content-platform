@@ -2,6 +2,7 @@ import * as request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { createTestApp, TestApp } from '../utils/test-app.factory';
 import { createBrandFixture } from '../fixtures/brand.fixture';
+import { BrandEntity } from '../../src/brands/entities/brand.entity';
 import { LLMProvider, Tone } from '../../src/common/types/domain.types';
 
 describe('Brands E2E (/api/v1/brands)', () => {
@@ -20,8 +21,8 @@ describe('Brands E2E (/api/v1/brands)', () => {
   beforeEach(() => {
     testApp.brandRepo.find.mockResolvedValue([]);
     testApp.brandRepo.findOne.mockResolvedValue(null);
-    testApp.brandRepo.save.mockImplementation((e) => Promise.resolve({ id: 'brand-e2e-uuid', ...e }));
-    testApp.brandRepo.create.mockImplementation((dto) => ({ id: 'brand-e2e-uuid', isActive: true, createdAt: new Date(), updatedAt: new Date(), ...dto }));
+    testApp.brandRepo.save.mockImplementation((e: Partial<BrandEntity>) => Promise.resolve({ id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', ...e } as unknown as BrandEntity));
+    testApp.brandRepo.create.mockImplementation((dto: Partial<BrandEntity>) => ({ id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', isActive: true, createdAt: new Date(), updatedAt: new Date(), slug: '', name: '', ...dto } as unknown as BrandEntity));
   });
 
   // ── POST /brands ───────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ describe('Brands E2E (/api/v1/brands)', () => {
     it('returns 404 when brand does not exist', async () => {
       testApp.brandRepo.findOne.mockResolvedValue(null);
       await request(app.getHttpServer())
-        .get('/api/v1/brands/nonexistent-id')
+        .get('/api/v1/brands/c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13')
         .expect(404);
     });
   });
@@ -114,7 +115,14 @@ describe('Brands E2E (/api/v1/brands)', () => {
 
       const res = await request(app.getHttpServer())
         .patch(`/api/v1/brands/${brand.id}/config`)
-        .send({ config: { maxContentLength: 5000 } })
+        .send({
+          config: {
+            defaultTone: Tone.TECHNICAL,
+            allowedModels: ['claude-sonnet-4-6'],
+            preferredProvider: LLMProvider.CLAUDE,
+            maxContentLength: 5000,
+          },
+        })
         .expect(200);
 
       expect(res.body.config.maxContentLength).toBe(5000);
@@ -123,8 +131,15 @@ describe('Brands E2E (/api/v1/brands)', () => {
     it('returns 404 when brand does not exist', async () => {
       testApp.brandRepo.findOne.mockResolvedValue(null);
       await request(app.getHttpServer())
-        .patch('/api/v1/brands/bad-id/config')
-        .send({ config: { maxContentLength: 1000 } })
+        .patch('/api/v1/brands/c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13/config')
+        .send({
+          config: {
+            defaultTone: Tone.TECHNICAL,
+            allowedModels: ['claude-sonnet-4-6'],
+            preferredProvider: LLMProvider.CLAUDE,
+            maxContentLength: 1000,
+          },
+        })
         .expect(404);
     });
   });
