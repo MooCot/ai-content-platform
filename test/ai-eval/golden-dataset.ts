@@ -32,6 +32,11 @@ export interface GoldenEntry {
   requiredKeywords: string[];
   /** Keywords that must NOT appear (hallucination guards). */
   forbiddenPhrases: string[];
+  /**
+   * When true, this entry tests degraded-pipeline output (OPTIMIZER and QA skipped).
+   * Thresholds are set lower to reflect raw draft quality without post-processing.
+   */
+  degraded?: boolean;
   disabled?: boolean;
 }
 
@@ -99,6 +104,58 @@ export const GOLDEN_DATASET: GoldenEntry[] = [
     },
     requiredKeywords: ['AI', 'content'],
     forbiddenPhrases: ['I cannot', 'however'],
+  },
+  {
+    id: 'gd-005',
+    promptVersion: '1.0.0',
+    topic: 'Landing page for an enterprise AI writing assistant',
+    contentType: ContentType.LANDING_PAGE,
+    expectedTone: Tone.FORMAL,
+    thresholds: {
+      relevance: 0.72,
+      tone: 0.72,
+      factuality: 0.68,
+      readability: 0.70,
+      composite: 0.70,
+    },
+    requiredKeywords: ['AI', 'writing', 'enterprise'],
+    forbiddenPhrases: ['I cannot', 'as an AI', 'I don\'t know'],
+  },
+  {
+    id: 'gd-006',
+    promptVersion: '1.0.0',
+    topic: 'Product description for a semantic search API',
+    contentType: ContentType.PRODUCT_DESCRIPTION,
+    expectedTone: Tone.TECHNICAL,
+    thresholds: {
+      relevance: 0.73,
+      tone: 0.70,
+      factuality: 0.72,
+      readability: 0.68,
+      composite: 0.70,
+    },
+    requiredKeywords: ['semantic', 'search', 'API'],
+    forbiddenPhrases: ['I cannot', 'as an AI', 'unlimited'],
+  },
+  {
+    // Degraded pipeline entry: OPTIMIZER and QA are skipped.
+    // Thresholds are lower to reflect raw draft quality without post-processing.
+    // Purpose: catch regressions where degradation silently breaks output quality.
+    id: 'gd-007',
+    promptVersion: '1.0.0',
+    topic: 'Introduction to Vector Databases',
+    contentType: ContentType.BLOG,
+    expectedTone: Tone.TECHNICAL,
+    degraded: true,
+    thresholds: {
+      relevance: 0.68,
+      tone: 0.65,
+      factuality: 0.65,
+      readability: 0.60,
+      composite: 0.65,
+    },
+    requiredKeywords: ['vector', 'embedding', 'search'],
+    forbiddenPhrases: ['I cannot', 'as an AI'],
   },
 ];
 
