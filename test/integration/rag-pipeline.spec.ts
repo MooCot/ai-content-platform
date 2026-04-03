@@ -6,6 +6,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { RAGService } from '../../src/rag/services/rag.service';
 import { TextSplitterService } from '../../src/rag/services/text-splitter.service';
 import { DocumentParserService } from '../../src/rag/services/document-parser.service';
@@ -51,12 +52,9 @@ describe('RAG Pipeline Integration', () => {
         },
         { provide: VECTOR_STORE_TOKEN, useValue: vectorStore     },
         { provide: LLMRouterService,   useValue: llmRouterMock   },
-        { provide: 'ConfigService', useValue: createMockConfigService() },
+        { provide: ConfigService, useValue: createMockConfigService() },
       ],
-    })
-      .overrideProvider('ConfigService')
-      .useValue(createMockConfigService())
-      .compile();
+    }).compile();
 
     service = module.get(RAGService);
   });
@@ -80,9 +78,9 @@ describe('RAG Pipeline Integration', () => {
     // Wait for async processDocument() to complete
     await new Promise((r) => setTimeout(r, 50));
 
-    const statusTransitions = repoMock.update.mock.calls.map(
-      ([, p]) => (p as { status: string }).status,
-    );
+    const statusTransitions = (
+      repoMock.update.mock.calls as unknown as Array<[unknown, { status: string }]>
+    ).map(([, p]) => p.status);
     expect(statusTransitions).toContain(DocumentStatus.CHUNKING);
     expect(statusTransitions).toContain(DocumentStatus.EMBEDDING);
     expect(statusTransitions).toContain(DocumentStatus.READY);
@@ -133,12 +131,15 @@ describe('RAG Pipeline Integration', () => {
   // ── Semantic search ───────────────────────────────────────────────────────
 
   it('finds relevant chunks after ingestion', async () => {
+    // Use unit vectors so dot-product score stays in [0, 1] as required by RetrievalResultContractV1
+    const unitVec = Array(1536).fill(1 / Math.sqrt(1536));
+
     // Seed the vector store directly
     await vectorStore.ensureCollection('brand_brand-search', 1536);
     await vectorStore.upsert('brand_brand-search', [
       {
         id: 'c1',
-        vector: Array(1536).fill(0.9),
+        vector: unitVec,
         payload: {
           content: 'Vector databases use cosine similarity',
           documentId: 'doc-1',
@@ -149,7 +150,7 @@ describe('RAG Pipeline Integration', () => {
       },
     ]);
 
-    llmRouterMock.embed.mockResolvedValue([Array(1536).fill(0.9)]);
+    llmRouterMock.embed.mockResolvedValue([unitVec]);
     const results = await service.search('brand-search', 'cosine similarity', 5);
 
     expect(results).toHaveLength(1);
@@ -177,12 +178,92 @@ describe('RAG Pipeline Integration', () => {
     repoMock.create.mockReturnValue(docBase as DocumentEntity);
     repoMock.save.mockResolvedValue(docBase as DocumentEntity);
 
-    const { parse } = service['documentParser'] as { parse: jest.Mock };
-    if (parse) parse.mockRejectedValueOnce(new Error('parse error'));
+    const documentParser = service['documentParser'] as unknown as { parse: { mockRejectedValueOnce: (e: Error) => void } };
+    if (documentParser?.parse) documentParser.parse.mockRejectedValueOnce(new Error('parse error'));
 
     // Should resolve without throwing (async background task)
     await expect(
       service.ingest('brand-1', Buffer.alloc(0), 'bad.bin', 'application/octet-stream'),
     ).resolves.toBeDefined();
+  });
+
+  // ── Brand isolation contract filter ────────────────────────────────────────
+
+  it('drops search results where metadata.brandId does not match the query brand', async () => {
+    // Ensure the collection exists so collectionExists() returns true
+    await vectorStore.ensureCollection('brand_brand-target', 1536);
+
+    // Spy on vectorStore.search to bypass the built-in payload filter and
+    // return a chunk whose metadata.brandId belongs to a different brand.
+    // This simulates a vector store bug or misconfiguration to prove RAGService
+    // enforces brand isolation as a second gate.
+    jest.spyOn(vectorStore, 'search').mockResolvedValueOnce([
+      {
+        chunkId: 'cross-brand-chunk',
+        content: 'Sensitive data from another brand',
+        score: 0.97,
+        metadata: {
+          documentId: 'doc-other',
+          brandId: 'brand-other', // ← wrong brand — must be dropped
+          filename: 'other.pdf',
+          chunkIndex: 0,
+        },
+      },
+    ]);
+
+    llmRouterMock.embed.mockResolvedValue([Array(1536).fill(0.5)]);
+
+    const results = await service.search('brand-target', 'any query', 5);
+
+    expect(results).toHaveLength(0);
+  });
+
+  it('includes results whose metadata.brandId matches the query brand', async () => {
+    await vectorStore.ensureCollection('brand_brand-match', 1536);
+
+    jest.spyOn(vectorStore, 'search').mockResolvedValueOnce([
+      {
+        chunkId: 'correct-chunk',
+        content: 'Correct brand content',
+        score: 0.88,
+        metadata: {
+          documentId: 'doc-own',
+          brandId: 'brand-match', // ← correct brand — must be kept
+          filename: 'own.pdf',
+          chunkIndex: 0,
+        },
+      },
+    ]);
+
+    llmRouterMock.embed.mockResolvedValue([Array(1536).fill(0.5)]);
+
+    const results = await service.search('brand-match', 'query', 5);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].chunkId).toBe('correct-chunk');
+  });
+
+  // ── FAILED status on embedding error ─────────────────────────────────────
+
+  it('marks document FAILED when embed() throws, without crashing the service', async () => {
+    const docBase: Partial<DocumentEntity> = {
+      id: 'doc-embed-fail',
+      brandId: 'brand-1',
+      filename: 'embed-fail.txt',
+      mimeType: 'text/plain',
+      status: DocumentStatus.PENDING,
+    };
+    repoMock.create.mockReturnValue(docBase as DocumentEntity);
+    repoMock.save.mockResolvedValue(docBase as DocumentEntity);
+
+    llmRouterMock.embed.mockRejectedValue(new Error('embedding service down'));
+
+    await service.ingest('brand-1', Buffer.from('some text content'), 'embed-fail.txt', 'text/plain');
+    await new Promise((r) => setTimeout(r, 100));
+
+    const failedCall = (
+      repoMock.update.mock.calls as unknown as Array<[unknown, { status: string }]>
+    ).find(([, p]) => p.status === DocumentStatus.FAILED);
+    expect(failedCall).toBeDefined();
   });
 });

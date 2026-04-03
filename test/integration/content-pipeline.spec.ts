@@ -14,6 +14,8 @@ import { StreamingService } from '../../src/streaming/streaming.service';
 import { EvaluationService } from '../../src/evaluation/evaluation.service';
 import { MetricsService } from '../../src/observability/metrics.service';
 import { QueueService } from '../../src/queue/queue.service';
+import { DegradationService } from '../../src/resilience/degradation.service';
+import { AgentContext } from '../../src/agents/context/agent-context';
 import { ContentJobEntity } from '../../src/content/entities/content-job.entity';
 import { ContentType, JobStatus, Tone } from '../../src/common/types/domain.types';
 import { createRepositoryMock } from '../utils/repository.mock';
@@ -168,5 +170,122 @@ describe('ContentPipeline Integration', () => {
       { status: JobStatus.RUNNING },
       expect.objectContaining({ status: JobStatus.FAILED }),
     );
+  });
+
+  // ── Degradation path (queue overload) ─────────────────────────────────────
+
+  describe('Degradation path — queue overload', () => {
+    let degradedProcessor: ContentPipelineProcessor;
+    let degradedMetrics: jest.Mocked<MetricsService>;
+    let degradedJobRepo: ReturnType<typeof createRepositoryMock<ContentJobEntity>>;
+
+    beforeEach(async () => {
+      degradedJobRepo = createRepositoryMock<ContentJobEntity>();
+      const jobEntity = createContentJobFixture({ status: JobStatus.QUEUED });
+      degradedJobRepo.create.mockReturnValue(jobEntity as ContentJobEntity);
+      degradedJobRepo.save.mockResolvedValue(jobEntity as ContentJobEntity);
+      degradedJobRepo.update.mockResolvedValue({ affected: 1 } as never);
+
+      degradedMetrics = {
+        recordPipelineLatency: jest.fn(),
+        recordQueueWaitTime: jest.fn(),
+        setQueueDepth: jest.fn(),
+        recordDegradation: jest.fn(),
+      } as unknown as jest.Mocked<MetricsService>;
+
+      const brand = createBrandFixture();
+
+      const degradedModule: TestingModule = await Test.createTestingModule({
+        providers: [
+          ContentPipelineProcessor,
+          { provide: getRepositoryToken(ContentJobEntity), useValue: degradedJobRepo },
+          { provide: BrandsService, useValue: { findById: jest.fn().mockResolvedValue(brand) } },
+          {
+            provide: AgentOrchestratorService,
+            useValue: {
+              run: jest.fn().mockImplementation(async (ctx: AgentContext) => {
+                // Simulate orchestrator reading ctx.degradation and reflecting it in result
+                return {
+                  ...buildResult(),
+                  degraded: ctx.degradation.isDegraded,
+                  degradationReasons: [...ctx.degradation.reasons],
+                };
+              }),
+            },
+          },
+          {
+            provide: StreamingService,
+            useValue: { emit: jest.fn(), close: jest.fn(), isActive: jest.fn().mockReturnValue(true) },
+          },
+          { provide: EvaluationService, useValue: { evaluate: jest.fn().mockResolvedValue(undefined) } },
+          { provide: MetricsService, useValue: degradedMetrics },
+          {
+            provide: QueueService,
+            useValue: { getDepth: jest.fn().mockResolvedValue(100), enqueue: jest.fn() },
+          },
+          {
+            provide: DegradationService,
+            useValue: { isQueueOverloaded: jest.fn().mockReturnValue(true) },
+          },
+        ],
+      }).compile();
+
+      degradedProcessor = degradedModule.get(ContentPipelineProcessor);
+    });
+
+    it('emits queue_overload degradation metric when queue depth exceeds threshold', async () => {
+      await degradedProcessor.process(buildBullJob() as Job);
+      expect(degradedMetrics.recordDegradation).toHaveBeenCalledWith('queue_overload');
+    });
+
+    it('still transitions job to DONE when pipeline completes in degraded mode', async () => {
+      await degradedProcessor.process(buildBullJob() as Job);
+      const statuses = (
+        degradedJobRepo.update.mock.calls as unknown as Array<[unknown, { status: string }]>
+      ).map(([, p]) => p.status);
+      expect(statuses).toContain(JobStatus.DONE);
+    });
+
+    it('persists degraded: true and queue_overload reason in the job result', async () => {
+      await degradedProcessor.process(buildBullJob() as Job);
+      const resultUpdate = (
+        degradedJobRepo.update.mock.calls as unknown as Array<[unknown, Record<string, unknown>]>
+      ).find(([, p]) => (p['result'] as { degraded?: boolean } | undefined)?.degraded === true);
+
+      expect(resultUpdate).toBeDefined();
+      const result = resultUpdate![1]['result'] as { degradationReasons: string[] };
+      expect(result.degradationReasons).toContain('queue_overload');
+    });
+
+    it('does not call recordDegradation when no degradation reasons are accumulated', async () => {
+      // Separate processor with DegradationService returning false (not overloaded)
+      const cleanJobRepo = createRepositoryMock<ContentJobEntity>();
+      const cleanJobEntity = createContentJobFixture({ status: JobStatus.QUEUED });
+      cleanJobRepo.create.mockReturnValue(cleanJobEntity as ContentJobEntity);
+      cleanJobRepo.save.mockResolvedValue(cleanJobEntity as ContentJobEntity);
+      cleanJobRepo.update.mockResolvedValue({ affected: 1 } as never);
+
+      const cleanMetrics = { recordPipelineLatency: jest.fn(), recordDegradation: jest.fn() } as unknown as jest.Mocked<MetricsService>;
+      const brand = createBrandFixture();
+
+      const cleanModule = await Test.createTestingModule({
+        providers: [
+          ContentPipelineProcessor,
+          { provide: getRepositoryToken(ContentJobEntity), useValue: cleanJobRepo },
+          { provide: BrandsService, useValue: { findById: jest.fn().mockResolvedValue(brand) } },
+          { provide: AgentOrchestratorService, useValue: { run: jest.fn().mockResolvedValue(buildResult()) } },
+          { provide: StreamingService, useValue: { emit: jest.fn(), close: jest.fn() } },
+          { provide: EvaluationService, useValue: { evaluate: jest.fn().mockResolvedValue(undefined) } },
+          { provide: MetricsService, useValue: cleanMetrics },
+          { provide: QueueService, useValue: { getDepth: jest.fn().mockResolvedValue(1) } },
+          { provide: DegradationService, useValue: { isQueueOverloaded: jest.fn().mockReturnValue(false) } },
+        ],
+      }).compile();
+
+      const cleanProcessor = cleanModule.get(ContentPipelineProcessor);
+      await cleanProcessor.process(buildBullJob() as Job);
+
+      expect(cleanMetrics.recordDegradation).not.toHaveBeenCalled();
+    });
   });
 });
