@@ -108,7 +108,10 @@ describe('GeminiProvider', () => {
       messages: [{ role: 'user', content: 'Hi' }],
     });
     const [chatOptions] = mockStartChat.mock.calls[0];
-    expect(chatOptions.systemInstruction).toBe('Be concise.');
+    expect(chatOptions.systemInstruction).toEqual({
+      role: 'user',
+      parts: [{ text: 'Be concise.' }],
+    });
   });
 
   it('uses last message as the sendMessage argument', async () => {
