@@ -127,7 +127,7 @@ describe('EvaluationService', () => {
     it('records the evaluation score metric', async () => {
       await service.evaluate(createAgentContextFixture(), buildResult());
       expect(metricsMock.recordEvaluationScore).toHaveBeenCalledWith(
-        'brand-test-uuid',
+        createAgentContextFixture().brandId,
         ContentType.BLOG,
         expect.any(String),
         0.82,

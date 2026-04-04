@@ -4,9 +4,9 @@ import { createBrandFixture } from '../../../test/fixtures/brand.fixture';
 
 describe('AgentContext', () => {
   let ctx: AgentContext;
+  const brand = createBrandFixture();
 
   beforeEach(() => {
-    const brand = createBrandFixture();
     ctx = new AgentContext({
       jobId: 'job-1',
       brandId: brand.id,
@@ -19,7 +19,7 @@ describe('AgentContext', () => {
 
   it('initialises with correct readonly fields', () => {
     expect(ctx.jobId).toBe('job-1');
-    expect(ctx.brandId).toBe('brand-test-uuid');
+    expect(ctx.brandId).toBe(brand.id);
     expect(ctx.topic).toBe('Vector DBs');
     expect(ctx.contentType).toBe(ContentType.BLOG);
     expect(ctx.correlationId).toBe('corr-1');
