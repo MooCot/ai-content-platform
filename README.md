@@ -229,8 +229,10 @@ The platform treats degradation as a **first-class system behavior** — availab
 |---|---|---|
 | `queue_overload` | BullMQ depth ≥ `QUEUE_DEPTH_THRESHOLD` (default 50) at job start | Optional agents skipped immediately |
 | `rag_timeout` | RAG search exceeds `RAG_TIMEOUT_MS` (default 5 s) | Pipeline continues without retrieval context |
+| `memory_timeout` | Episodic memory recall exceeds 200 ms | Pipeline continues without personalisation context |
 | `llm_fallback` | LLM router switches to a non-preferred provider | Logged; pipeline continues |
 | `contract_retry` | Optional agent output fails schema validation on first attempt | Agent retried once |
+| `contract_violation` | One or more RAG chunks dropped at the contract boundary | Pipeline continues with partial retrieval context |
 | `optional_agent_skipped` | Optional agent fails on both attempts, or pipeline already degraded | `optimized` falls back to `raw`; `finalContent` falls back through the chain |
 
 ### Optional vs required agents
@@ -267,8 +269,10 @@ Optional agents are skipped when **either** condition holds:
 ```
 content_platform_degraded_total{reason="queue_overload"}
 content_platform_degraded_total{reason="rag_timeout"}
+content_platform_degraded_total{reason="memory_timeout"}
 content_platform_degraded_total{reason="llm_fallback"}
 content_platform_degraded_total{reason="contract_retry"}
+content_platform_degraded_total{reason="contract_violation"}
 content_platform_degraded_total{reason="optional_agent_skipped"}
 ```
 
@@ -281,6 +285,8 @@ Each label is incremented once per pipeline run where that reason occurred. The 
 | `QUEUE_DEPTH_THRESHOLD` | `50` | BullMQ waiting+active jobs that triggers overload |
 | `RAG_TIMEOUT_MS` | `5000` | Vector search timeout before `rag_timeout` fires |
 | `PIPELINE_LATENCY_BUDGET_MS` | `90000` | Optional agents skipped after this many ms |
+| `LLM_CB_FAILURE_THRESHOLD` | `5` | Consecutive provider failures before circuit opens |
+| `LLM_CB_COOLDOWN_MS` | `30000` | ms circuit stays OPEN before allowing a test request |
 
 ---
 
@@ -488,5 +494,15 @@ Both `Deployment` resources (stable and canary) sit behind the same `Service`. O
 ## LLM Fallback Chain
 
 Configured via `LLM_FALLBACK_CHAIN=claude,openai,gemini`. On 429/rate-limit/503 the router retries up to `LLM_MAX_RETRIES` times with exponential backoff, then falls to the next provider. If all providers fail, returns `503 Service Unavailable`.
+
+### Circuit breaker
+
+Each provider has an independent circuit breaker (`CLOSED → OPEN → HALF_OPEN`):
+
+- **CLOSED** — normal operation; failures are counted per consecutive run
+- **OPEN** — provider is skipped immediately (no retries wasted); entered after `LLM_CB_FAILURE_THRESHOLD` consecutive failures
+- **HALF_OPEN** — one test request is allowed after `LLM_CB_COOLDOWN_MS`; success resets to CLOSED, failure reopens
+
+When a circuit is OPEN the router skips that provider and moves to the next in the fallback chain. `onFallback` is still triggered so the pipeline records a `llm_fallback` degradation reason. Use `LLMRouterService.getCircuitState(provider)` to expose circuit states in a health endpoint.
 
 Embeddings always use OpenAI (`text-embedding-ada-002`) since Claude and Gemini do not expose embedding APIs.

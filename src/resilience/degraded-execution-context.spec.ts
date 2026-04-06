@@ -39,6 +39,8 @@ describe('DegradedExecutionContext', () => {
       'queue_overload',
       'contract_retry',
       'optional_agent_skipped',
+      'memory_timeout',
+      'contract_violation',
     ];
     for (const reason of allReasons) {
       expect(() => ctx.append(reason)).not.toThrow();

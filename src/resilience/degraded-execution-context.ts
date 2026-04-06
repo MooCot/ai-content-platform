@@ -4,7 +4,11 @@ export type DegradationReason =
   | 'llm_fallback'
   | 'queue_overload'
   | 'contract_retry'
-  | 'optional_agent_skipped';
+  | 'optional_agent_skipped'
+  /** Memory recall (200 ms budget) did not complete in time — pipeline continues without episodic context */
+  | 'memory_timeout'
+  /** One or more RAG chunks were dropped at the contract boundary — context is partial */
+  | 'contract_violation';
 
 /**
  * Append-only record of degradation events for a single pipeline run.

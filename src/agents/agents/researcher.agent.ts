@@ -21,13 +21,26 @@ export class ResearcherAgent {
 
     this.logger.log(`[${ctx.jobId}] ResearcherAgent: ${ctx.searchQueries.length} queries`);
 
-    // Recall relevant past generations for this topic (best-effort, 200 ms timeout)
+    // Recall relevant past generations for this topic (best-effort, 200 ms timeout).
+    // If the vector store is slow we continue without memory rather than blocking
+    // the pipeline — but we do record it as a degradation reason so clients know
+    // the context may be less personalised than usual.
+    let memoryTimedOut = false;
+    const memoryTimeoutHandle = new Promise<[]>((resolve) =>
+      setTimeout(() => {
+        memoryTimedOut = true;
+        resolve([]);
+      }, 200),
+    );
     const pastMemories = await Promise.race([
       this.memory.queryRelevant(ctx.brandId, ctx.topic, { limit: 3 }),
-      new Promise<[]>((resolve) => setTimeout(() => resolve([]), 200)),
+      memoryTimeoutHandle,
     ]);
 
-    if (pastMemories.length) {
+    if (memoryTimedOut) {
+      ctx.degradation.append('memory_timeout');
+      this.logger.debug(`[${ctx.jobId}] Memory recall timed out after 200ms`);
+    } else if (pastMemories.length) {
       this.logger.debug(
         `[${ctx.jobId}] Loaded ${pastMemories.length} past memory entries for topic "${ctx.topic}"`,
       );
@@ -50,7 +63,9 @@ export class ResearcherAgent {
     const ragResults = await Promise.race([
       Promise.all(
         ctx.searchQueries.map((q) =>
-          this.ragService.search(ctx.brandId, q, 5).catch(() => [] as SearchResult[]),
+          this.ragService
+            .search(ctx.brandId, q, 5, () => ctx.degradation.append('contract_violation'))
+            .catch(() => [] as SearchResult[]),
         ),
       ),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), ragTimeout)),

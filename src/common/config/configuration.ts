@@ -35,6 +35,12 @@ export const configuration = () => ({
     fallbackChain: (process.env.LLM_FALLBACK_CHAIN ?? 'claude,openai,gemini').split(','),
     maxRetries: parseInt(process.env.LLM_MAX_RETRIES ?? '3', 10),
     retryDelayMs: parseInt(process.env.LLM_RETRY_DELAY_MS ?? '1000', 10),
+    circuitBreaker: {
+      /** Consecutive failures before a provider's circuit opens */
+      failureThreshold: parseInt(process.env.LLM_CB_FAILURE_THRESHOLD ?? '5', 10),
+      /** Milliseconds a circuit stays OPEN before allowing one test request (HALF_OPEN) */
+      cooldownMs: parseInt(process.env.LLM_CB_COOLDOWN_MS ?? '30000', 10),
+    },
   },
 
   rag: {

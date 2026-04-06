@@ -96,8 +96,8 @@ describe('ResearcherAgent', () => {
     await agent.run(ctx);
 
     expect(rag.search).toHaveBeenCalledTimes(2);
-    expect(rag.search).toHaveBeenCalledWith(ctx.brandId, 'query-a', 5);
-    expect(rag.search).toHaveBeenCalledWith(ctx.brandId, 'query-b', 5);
+    expect(rag.search).toHaveBeenCalledWith(ctx.brandId, 'query-a', 5, expect.any(Function));
+    expect(rag.search).toHaveBeenCalledWith(ctx.brandId, 'query-b', 5, expect.any(Function));
   });
 
   it('populates ragContext with deduplicated high-score chunks sorted by score desc', async () => {
@@ -271,11 +271,68 @@ describe('ResearcherAgent', () => {
       await jest.runAllTimersAsync();
       await runPromise;
 
-      // Pipeline should complete normally without errors
-      expect(ctx.degradation.isDegraded).toBe(false);
+      // Pipeline completes but records the timeout as a degradation reason
+      expect(ctx.degradation.reasons).toContain('memory_timeout');
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('appends memory_timeout to ctx.degradation when memory recall exceeds 200ms', async () => {
+    jest.useFakeTimers();
+    try {
+      memory.queryRelevant.mockReturnValue(
+        new Promise(() => {}) as ReturnType<MemoryService['queryRelevant']>,
+      );
+      const agent = new ResearcherAgent(rag, memory);
+      const ctx = makeCtx({ queries: [] });
+
+      const runPromise = agent.run(ctx);
+      await jest.runAllTimersAsync();
+      await runPromise;
+
+      expect(ctx.degradation.isDegraded).toBe(true);
+      expect(ctx.degradation.reasons).toContain('memory_timeout');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does NOT append memory_timeout when memory returns in time', async () => {
+    memory.queryRelevant.mockResolvedValue([]);
+    const agent = new ResearcherAgent(rag, memory);
+    const ctx = makeCtx({ queries: [] });
+
+    await agent.run(ctx);
+
+    expect(ctx.degradation.reasons).not.toContain('memory_timeout');
+  });
+
+  // ── Contract violation callback ─────────────────────────────────────────
+
+  it('appends contract_violation to ctx when RAGService calls onContractViolation', async () => {
+    const agent = new ResearcherAgent(rag, memory);
+    const ctx = makeCtx({ queries: ['q1'] });
+
+    // Simulate RAGService dropping one chunk and firing the callback
+    rag.search.mockImplementation((_brandId, _query, _limit, onContractViolation) => {
+      onContractViolation?.();
+      return Promise.resolve([makeResult()]);
+    });
+
+    await agent.run(ctx);
+
+    expect(ctx.degradation.reasons).toContain('contract_violation');
+  });
+
+  it('does NOT append contract_violation when all RAG results pass validation', async () => {
+    const agent = new ResearcherAgent(rag, memory);
+    const ctx = makeCtx({ queries: ['q1'] });
+    rag.search.mockResolvedValue([makeResult()]);
+
+    await agent.run(ctx);
+
+    expect(ctx.degradation.reasons).not.toContain('contract_violation');
   });
 
   // ── Cancellation ────────────────────────────────────────────────────────

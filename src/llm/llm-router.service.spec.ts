@@ -12,6 +12,7 @@ import {
 } from '../../test/mocks/llm-provider.mock';
 import { ConfigService } from '@nestjs/config';
 import { createMockConfigService } from '../../test/utils/mock-config.service';
+import { CircuitState } from './circuit-breaker';
 
 describe('LLMRouterService', () => {
   let service: LLMRouterService;
@@ -23,12 +24,12 @@ describe('LLMRouterService', () => {
       providers: [
         LLMRouterService,
         { provide: LLM_PROVIDER_TOKEN, useValue: providers },
-        { provide: ConfigService, useValue: createMockConfigService() },
+        {
+          provide: ConfigService,
+          useValue: createMockConfigService({ 'llmRouter.retryDelayMs': 0 }),
+        },
       ],
-    })
-      .overrideProvider(ConfigService)
-      .useValue(createMockConfigService())
-      .compile();
+    }).compile();
 
     service = module.get(LLMRouterService);
   }
@@ -223,6 +224,94 @@ describe('LLMRouterService', () => {
           },
           error: done,
         });
+    });
+  });
+
+  // ── circuit breaker ───────────────────────────────────────────────────────
+
+  describe('circuit breaker', () => {
+    it('getCircuitState() returns CLOSED initially for all providers', async () => {
+      expect(service.getCircuitState(LLMProvider.CLAUDE)).toBe(CircuitState.CLOSED);
+      expect(service.getCircuitState(LLMProvider.OPENAI)).toBe(CircuitState.CLOSED);
+    });
+
+    it('opens the circuit after failureThreshold consecutive failures', async () => {
+      // Default threshold is 5; force Claude to always fail
+      const failClaude = createFailingProvider(LLMProvider.CLAUDE, 'rate limit exceeded');
+      await buildModule([failClaude, openaiMock]);
+
+      // Exhaust all retries across enough calls to trip the breaker (threshold = 5)
+      for (let i = 0; i < 5; i++) {
+        await service.complete({ messages: [{ role: 'user', content: 'hi' }] }).catch(() => {});
+      }
+
+      expect(service.getCircuitState(LLMProvider.CLAUDE)).toBe(CircuitState.OPEN);
+    });
+
+    it('skips an OPEN provider and falls through to the next without retrying it', async () => {
+      const failClaude = createFailingProvider(LLMProvider.CLAUDE, 'rate limit exceeded');
+      await buildModule([failClaude, openaiMock]);
+
+      // Open Claude's circuit
+      for (let i = 0; i < 5; i++) {
+        await service.complete({ messages: [{ role: 'user', content: 'hi' }] }).catch(() => {});
+      }
+      expect(service.getCircuitState(LLMProvider.CLAUDE)).toBe(CircuitState.OPEN);
+
+      // Next call should go straight to OpenAI — Claude must not be attempted
+      const completeSpy = jest.spyOn(failClaude, 'complete');
+      const result = await service.complete({ messages: [{ role: 'user', content: 'hi' }] });
+
+      expect(completeSpy).not.toHaveBeenCalled();
+      expect(result.provider).toBe(LLMProvider.OPENAI);
+    });
+
+    it('transitions to HALF_OPEN and resets to CLOSED after a successful test request', async () => {
+      const nowSpy = jest.spyOn(Date, 'now');
+
+      const failClaude = createFailingProvider(LLMProvider.CLAUDE, 'rate limit exceeded');
+      await buildModule([failClaude, openaiMock]);
+
+      nowSpy.mockReturnValue(0);
+
+      // Open the circuit
+      for (let i = 0; i < 5; i++) {
+        await service.complete({ messages: [{ role: 'user', content: 'hi' }] }).catch(() => {});
+      }
+      expect(service.getCircuitState(LLMProvider.CLAUDE)).toBe(CircuitState.OPEN);
+
+      // Advance past cooldown — circuit moves to HALF_OPEN on next isOpen() call
+      nowSpy.mockReturnValue(31_000); // > 30 s default cooldown
+
+      // Replace failing Claude with a working one
+      const workingClaude = createClaudeProviderMock();
+      await buildModule([workingClaude, openaiMock]);
+
+      // After a successful call the circuit must close
+      await service.complete(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        { preferredProvider: LLMProvider.CLAUDE },
+      );
+      expect(service.getCircuitState(LLMProvider.CLAUDE)).toBe(CircuitState.CLOSED);
+
+      nowSpy.mockRestore();
+    });
+
+    it('calls onFallback even when the preferred provider circuit is OPEN', async () => {
+      const failClaude = createFailingProvider(LLMProvider.CLAUDE, 'rate limit exceeded');
+      await buildModule([failClaude, openaiMock]);
+
+      for (let i = 0; i < 5; i++) {
+        await service.complete({ messages: [{ role: 'user', content: 'hi' }] }).catch(() => {});
+      }
+
+      const onFallback = jest.fn();
+      await service.complete(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        { preferredProvider: LLMProvider.CLAUDE, onFallback },
+      );
+
+      expect(onFallback).toHaveBeenCalledWith(LLMProvider.OPENAI);
     });
   });
 

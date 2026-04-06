@@ -108,8 +108,20 @@ export class RAGService {
     }
   }
 
-  /** Semantic search scoped to a brand's collection */
-  async search(brandId: BrandId, query: string, limit?: number): Promise<SearchResult[]> {
+  /**
+   * Semantic search scoped to a brand's collection.
+   *
+   * @param onContractViolation - Optional callback invoked once per dropped result.
+   *   Callers (e.g. ResearcherAgent) use this to append a degradation reason so
+   *   the pipeline knows it received a reduced context without coupling RAGService
+   *   to AgentContext — the same pattern as `onFallback` in LLMRouterService.
+   */
+  async search(
+    brandId: BrandId,
+    query: string,
+    limit?: number,
+    onContractViolation?: () => void,
+  ): Promise<SearchResult[]> {
     const searchLimit = limit ?? this.config.get('rag.searchLimit', { infer: true }) ?? 5;
     const [queryEmbedding] = await this.llmRouter.embed([query]);
 
@@ -131,12 +143,14 @@ export class RAGService {
         this.logger.warn(
           `RAG result dropped — contract violation: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
         );
+        onContractViolation?.();
         return false;
       }
       if (parsed.data.metadata.brandId !== brandId) {
         this.logger.error(
           `RAG result dropped — brand isolation violation: expected ${brandId}, got ${parsed.data.metadata.brandId}`,
         );
+        onContractViolation?.();
         return false;
       }
       return true;

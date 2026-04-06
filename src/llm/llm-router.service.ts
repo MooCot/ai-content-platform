@@ -12,6 +12,7 @@ import {
 import { LLMProvider } from '../common/types/domain.types';
 import { LLMProviderExhaustedException } from '../common/exceptions/domain.exceptions';
 import { AppConfig } from '../common/config/configuration';
+import { ProviderCircuitBreaker, CircuitState } from './circuit-breaker';
 
 export interface RouterOptions {
   preferredProvider?: LLMProvider;
@@ -35,6 +36,7 @@ export class LLMRouterService {
   private readonly maxRetries: number;
   private readonly retryDelayMs: number;
   private readonly providerMap: Map<LLMProvider, ILLMProvider>;
+  private readonly circuitBreakers: Map<LLMProvider, ProviderCircuitBreaker>;
 
   constructor(
     @Inject(LLM_PROVIDER_TOKEN) providers: ILLMProvider[],
@@ -46,6 +48,14 @@ export class LLMRouterService {
     }) as LLMProvider[];
     this.maxRetries = this.config.get('llmRouter.maxRetries', { infer: true });
     this.retryDelayMs = this.config.get('llmRouter.retryDelayMs', { infer: true });
+
+    const cbConfig = this.config.get('llmRouter.circuitBreaker', { infer: true });
+    this.circuitBreakers = new Map(
+      [...this.providerMap.keys()].map((key) => [
+        key,
+        new ProviderCircuitBreaker(cbConfig.failureThreshold, cbConfig.cooldownMs),
+      ]),
+    );
   }
 
   /** Complete a request with automatic fallback across providers. */
@@ -61,6 +71,13 @@ export class LLMRouterService {
       const provider = this.providerMap.get(providerKey);
       if (!provider) continue;
 
+      const cb = this.circuitBreakers.get(providerKey);
+      if (cb?.isOpen()) {
+        this.logger.warn(`[circuit-breaker] ${providerKey} is OPEN — skipping`);
+        tried.push(providerKey);
+        continue;
+      }
+
       // Notify caller that we fell back to a non-preferred provider
       if (chainIdx > 0) {
         options.onFallback?.(providerKey);
@@ -69,13 +86,16 @@ export class LLMRouterService {
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         try {
           this.logger.debug(`Attempting ${providerKey} (attempt ${attempt})`);
-          return await provider.complete({
+          const result = await provider.complete({
             ...request,
             model: options.model ?? request.model,
             temperature: options.temperature ?? request.temperature,
             maxTokens: options.maxTokens ?? request.maxTokens,
           });
+          cb?.recordSuccess();
+          return result;
         } catch (err) {
+          cb?.recordFailure();
           const isRetryable = this.isRetryableError(err);
           this.logger.warn(`${providerKey} attempt ${attempt} failed: ${String(err)}`);
 
@@ -102,6 +122,13 @@ export class LLMRouterService {
         const provider = this.providerMap.get(providerKey);
         if (!provider) continue;
 
+        const cb = this.circuitBreakers.get(providerKey);
+        if (cb?.isOpen()) {
+          this.logger.warn(`[circuit-breaker] ${providerKey} is OPEN — skipping stream`);
+          tried.push(providerKey);
+          continue;
+        }
+
         if (chainIdx > 0) {
           options.onFallback?.(providerKey);
         }
@@ -120,9 +147,11 @@ export class LLMRouterService {
               });
           });
 
+          cb?.recordSuccess();
           subject.complete();
           return;
         } catch (err) {
+          cb?.recordFailure();
           this.logger.warn(`Stream failed on ${providerKey}: ${String(err)}`);
           tried.push(providerKey);
         }
@@ -160,6 +189,14 @@ export class LLMRouterService {
         `LLM structured output parse failed: ${String(err)}\nRaw: ${response.content}`,
       );
     }
+  }
+
+  /**
+   * Returns the current circuit state for a provider.
+   * Useful for health checks and observability endpoints.
+   */
+  getCircuitState(provider: LLMProvider): CircuitState {
+    return this.circuitBreakers.get(provider)?.getState() ?? CircuitState.CLOSED;
   }
 
   private buildChain(preferred?: LLMProvider): LLMProvider[] {
