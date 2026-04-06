@@ -306,7 +306,7 @@ describe('ContentPipelineProcessor — degradation', () => {
     queueServiceMock.getDepth.mockResolvedValue(50);
     degradationServiceMock.isQueueOverloaded.mockReturnValue(true);
 
-    let capturedCtx: AgentContext;
+    let capturedCtx!: AgentContext;
     orchestratorMock.run.mockImplementation(async (ctx) => {
       capturedCtx = ctx;
       return buildDegradedResult(['queue_overload']);
@@ -321,7 +321,7 @@ describe('ContentPipelineProcessor — degradation', () => {
     queueServiceMock.getDepth.mockResolvedValue(10);
     degradationServiceMock.isQueueOverloaded.mockReturnValue(false);
 
-    let capturedCtx: AgentContext;
+    let capturedCtx!: AgentContext;
     orchestratorMock.run.mockImplementation(async (ctx) => {
       capturedCtx = ctx;
       return buildDegradedResult([]);

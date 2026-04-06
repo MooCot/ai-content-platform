@@ -49,35 +49,45 @@ describe('BrandsService', () => {
     it('defaults ragEnabled to true when not provided', async () => {
       repo.save.mockResolvedValue(createBrandFixture());
       await service.create(baseDto);
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.ragEnabled).toBe(true);
     });
 
     it('uses provided ragEnabled: false when explicitly set', async () => {
       repo.save.mockResolvedValue(createBrandFixture());
       await service.create({ ...baseDto, config: { ...baseDto.config, ragEnabled: false } });
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.ragEnabled).toBe(false);
     });
 
     it('defaults maxContentLength to 2000 when not provided', async () => {
       repo.save.mockResolvedValue(createBrandFixture());
       await service.create(baseDto);
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.maxContentLength).toBe(2000);
     });
 
     it('uses provided maxContentLength when set', async () => {
       repo.save.mockResolvedValue(createBrandFixture());
       await service.create({ ...baseDto, config: { ...baseDto.config, maxContentLength: 5000 } });
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.maxContentLength).toBe(5000);
     });
 
     it('generates a default systemPrompt containing the brand name when not provided', async () => {
       repo.save.mockResolvedValue(createBrandFixture());
       await service.create(baseDto);
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.systemPrompt).toContain('Acme Corp');
     });
 
@@ -88,7 +98,9 @@ describe('BrandsService', () => {
         ...baseDto,
         config: { ...baseDto.config, systemPrompt: customPrompt },
       });
-      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      const created = repo.create.mock.calls[0][0] as unknown as {
+        config: Record<string, unknown>;
+      };
       expect(created.config.systemPrompt).toBe(customPrompt);
     });
 
