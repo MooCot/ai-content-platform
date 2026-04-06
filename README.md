@@ -506,3 +506,17 @@ Each provider has an independent circuit breaker (`CLOSED → OPEN → HALF_OPEN
 When a circuit is OPEN the router skips that provider and moves to the next in the fallback chain. `onFallback` is still triggered so the pipeline records a `llm_fallback` degradation reason. Use `LLMRouterService.getCircuitState(provider)` to expose circuit states in a health endpoint.
 
 Embeddings always use OpenAI (`text-embedding-ada-002`) since Claude and Gemini do not expose embedding APIs.
+
+---
+
+## Known limitations
+
+These are conscious trade-offs made for a pet-project scope. Each one has a known production solution.
+
+- **`AgentContext` mutations are not atomic** — agents write to shared mutable state sequentially; a partial write on agent failure leaves the context in an inconsistent state. The production fix is an immutable snapshot pattern: each agent returns a new context object rather than mutating the shared one.
+
+- **No circuit breaker on `EvaluationService`** — evaluation failures are silently swallowed (fire-and-forget by design), but if the scoring provider is down for an extended period the episodic memory quality gate never fires and Qdrant memory stagnates. A dead-letter queue + circuit breaker on the evaluation path would surface this.
+
+- **RAG brand isolation uses soft filtering** — chunks with a mismatched `brandId` are dropped at the contract layer and logged, but the violation is not escalated beyond a warning. In a true multi-tenant production system this should be a hard error with an incident alert, since any bypass would constitute a cross-tenant data leak.
+
+- **No per-brand SLA budgets** — all brands share the same agent timeouts (`PLANNER: 30 s`, `GENERATOR: 120 s`, etc.) regardless of corpus size or content type. Brand configuration could carry custom latency budgets so a brand with a large document corpus is not degraded on the same threshold as one with an empty index.
