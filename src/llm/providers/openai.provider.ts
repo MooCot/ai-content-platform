@@ -9,7 +9,7 @@ import {
   LLMStreamChunk,
   LLMToolCall,
 } from '../../common/interfaces/llm-provider.interface';
-import { LLMProvider, TokenUsage } from '../../common/types/domain.types';
+import { LLMProvider } from '../../common/types/domain.types';
 import { AppConfig } from '../../common/config/configuration';
 
 @Injectable()
@@ -139,9 +139,7 @@ export class OpenAIProvider implements ILLMProvider {
     }
   }
 
-  private buildMessages(
-    request: LLMCompletionRequest,
-  ): OpenAI.ChatCompletionMessageParam[] {
+  private buildMessages(request: LLMCompletionRequest): OpenAI.ChatCompletionMessageParam[] {
     const msgs: OpenAI.ChatCompletionMessageParam[] = [];
     if (request.systemPrompt) {
       msgs.push({ role: 'system', content: request.systemPrompt });

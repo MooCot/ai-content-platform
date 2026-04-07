@@ -20,7 +20,6 @@ export class HealthController {
       .catch(() => false);
 
     const status = dbOk ? 'ok' : 'degraded';
-    const code = dbOk ? 200 : 503;
 
     return {
       status,

@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { BrandEntity, BrandConfig } from './entities/brand.entity';
 import { CreateBrandDto, UpdateBrandConfigDto } from './dto/brand.dto';
 import { BrandNotFoundException } from '../common/exceptions/domain.exceptions';
-import { Tone, LLMProvider } from '../common/types/domain.types';
 
 @Injectable()
 export class BrandsService {
