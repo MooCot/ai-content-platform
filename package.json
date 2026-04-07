@@ -16,7 +16,7 @@
     "test:ai-eval": "jest --config jest.integration.config.js --testPathPattern='test/ai-eval'",
     "test:all": "npm run test && npm run test:integration && npm run test:e2e",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepare": "husky"
+    "prepare": "node -e \"process.env.NODE_ENV !== 'production' && require('child_process').execSync('husky', {stdio:'inherit'})\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
