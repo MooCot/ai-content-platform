@@ -1,0 +1,89 @@
+# Acme Tech — Company Knowledge Base
+
+## About Us
+
+Acme Tech is a B2B SaaS company founded in 2019, headquartered in San Francisco. We build AI-powered workflow automation tools that help mid-market companies reduce operational overhead and scale faster without increasing headcount.
+
+Our flagship product, **FlowBot**, integrates with 150+ enterprise tools — including Salesforce, HubSpot, Jira, Slack, and SAP — and lets non-technical teams automate complex multi-step processes through a no-code drag-and-drop interface.
+
+As of 2024 we serve over 3,400 customers across 42 countries, process more than 280 million automated actions per month, and maintain 99.97% uptime SLA.
+
+## Products
+
+### FlowBot Core
+The main automation platform. Key features:
+- Visual workflow builder with 400+ pre-built connectors
+- Conditional logic, loops, and branching paths
+- Real-time execution monitoring and error alerts
+- Role-based access control and audit logs
+- SOC 2 Type II certified, GDPR compliant
+
+Pricing: $299/month (Starter, up to 5 seats), $899/month (Growth, up to 25 seats), Enterprise custom pricing.
+
+### FlowBot AI
+An AI layer on top of Core that adds:
+- Natural-language workflow creation ("Build me a lead nurture sequence")
+- Intelligent error recovery — the AI diagnoses failures and suggests fixes
+- Anomaly detection on workflow performance metrics
+- Predictive scheduling based on historical load patterns
+
+Available as an add-on for $199/month or included in Enterprise.
+
+### FlowBot Analytics
+A reporting module that surfaces:
+- Per-workflow ROI estimates (time saved × average hourly cost)
+- Error rate trends and SLA breach forecasting
+- Seat utilization and license optimization recommendations
+
+Included in Growth and Enterprise plans.
+
+## Target Customers
+
+Primary ICP: Operations managers and RevOps leads at B2B companies with 50–500 employees that run on 10+ SaaS tools and struggle with manual handoffs between systems.
+
+Secondary ICP: Engineering teams at 500–2000 employee companies that want to reduce internal automation burden by empowering non-engineers.
+
+Industries with highest adoption: Financial services, healthcare tech, e-commerce, and professional services.
+
+## Competitive Advantages
+
+1. **Depth of integrations** — 150+ native connectors vs. competitors' 60–80. Enterprises don't need Zapier as a bridge.
+2. **Reliability** — 99.97% uptime, active-active multi-region deployment. Most competitors are single-region.
+3. **Security posture** — SOC 2 Type II, HIPAA-ready, on-premise deployment option for Enterprise.
+4. **Support quality** — Dedicated success manager for Growth+ customers, median first-response time under 4 minutes on Business Hours SLA.
+5. **Pricing transparency** — No per-action pricing surprises. Flat monthly fee with unlimited executions (subject to rate limits).
+
+## Common Customer Pain Points We Solve
+
+- **Lead routing delays**: Sales ops teams manually assign inbound leads based on territory and product interest. FlowBot automates this in real time, cutting average lead response time from 4 hours to under 2 minutes.
+- **Invoice approval bottlenecks**: Finance teams juggle email threads and spreadsheets to get invoices approved. FlowBot routes invoices automatically based on amount, vendor, and cost center, with escalation paths if SLAs are missed.
+- **Onboarding fragmentation**: HR creates accounts in 8+ systems manually for every new hire. FlowBot triggers a unified onboarding workflow from a single HRIS event, provisioning all accounts within 15 minutes.
+- **Customer churn signals**: CS teams miss early churn signals buried in product usage data. FlowBot monitors usage thresholds and auto-creates tasks for CSMs when accounts go dark.
+
+## Tone and Brand Voice
+
+Acme Tech communicates as a knowledgeable, practical partner — not a vendor. We avoid hype and buzzwords. We speak in specifics (metrics, time savings, dollar amounts). We respect the reader's intelligence and don't over-explain basics.
+
+Content pillars:
+- **Operational efficiency** — how to do more with the same team
+- **Reliability and trust** — enterprise-grade infrastructure, compliance, security
+- **Customer success stories** — real companies, real numbers
+- **Product education** — how to use FlowBot features effectively
+
+Avoid: generic AI hype, vague promises ("transform your business"), and technical jargon targeted at developers when the audience is operations or business.
+
+## Key Metrics and Proof Points
+
+- Average customer saves 18 hours/week of manual work in the first 90 days
+- 94% gross retention rate (industry benchmark: ~85%)
+- NPS of 67 (industry benchmark: 42)
+- Customers that adopt FlowBot AI reduce workflow error rates by 40% on average
+- ROI payback period: median 3.2 months
+
+## Recent News
+
+- **March 2024**: Closed $47M Series B led by Sequoia Capital
+- **January 2024**: Launched FlowBot AI (GA) after 6-month beta with 120 design partners
+- **November 2023**: Achieved HIPAA compliance, opening healthcare vertical
+- **September 2023**: Surpassed 3,000 paying customers milestone
+- **June 2023**: Launched native Salesforce connector (replacing previous Zapier-dependent integration)
