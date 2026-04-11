@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # seed.sh — Create demo brands and upload knowledge-base documents
-# Usage:  bash scripts/seed.sh [BASE_URL]
+# Usage:  bash .scripts/seed.sh [BASE_URL]
 #         BASE_URL defaults to http://localhost:3000
 #
 # Idempotent: brands and documents that already exist are skipped.

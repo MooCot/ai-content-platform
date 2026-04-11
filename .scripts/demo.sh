@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # demo.sh — End-to-end demo: create brand → upload doc → generate content
-# Usage:  bash scripts/demo.sh [BASE_URL]
+# Usage:  bash .scripts/demo.sh [BASE_URL]
 #         BASE_URL defaults to http://localhost:3000
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
