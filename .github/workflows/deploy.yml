@@ -120,14 +120,14 @@ jobs:
           DB_HOST: ${{ secrets.DB_HOST_STAGING }}
           QDRANT_URL: ${{ secrets.QDRANT_URL_STAGING }}
         run: |
-          envsubst < k8s/deployment-stable.yaml | kubectl apply -f -
-          kubectl apply -f k8s/service.yaml -n "$NAMESPACE"
-          kubectl apply -f k8s/ingress-staging.yaml -n "$NAMESPACE"
+          envsubst < .k8s/deployment-stable.yaml | kubectl apply -f -
+          kubectl apply -f .k8s/service.yaml -n "$NAMESPACE"
+          kubectl apply -f .k8s/ingress-staging.yaml -n "$NAMESPACE"
           kubectl rollout status deployment/content-platform-stable \
             -n "$NAMESPACE" --timeout=180s
 
       - name: Smoke test
-        run: bash scripts/smoke-test.sh "https://staging.content-platform.example.com"
+        run: bash .scripts/smoke-test.sh "https://staging.content-platform.example.com"
 
   # ╔════════════════════════════════════════════════════════════════╗
   # ║  CANARY  (10% трафика)                                         ║
@@ -170,7 +170,7 @@ jobs:
           DB_HOST: ${{ secrets.DB_HOST_PROD }}
           QDRANT_URL: ${{ secrets.QDRANT_URL_PROD }}
         run: |
-          envsubst < k8s/deployment-canary.yaml | kubectl apply -f -
+          envsubst < .k8s/deployment-canary.yaml | kubectl apply -f -
           kubectl rollout status deployment/content-platform-canary \
             -n "$NAMESPACE" --timeout=120s
 
@@ -201,7 +201,7 @@ jobs:
           CANARY_ERROR_THRESHOLD:   "1"
           CANARY_LATENCY_THRESHOLD: "2000"
           CANARY_VERIFY_DURATION:   "120"
-        run: bash scripts/verify-canary.sh
+        run: bash .scripts/verify-canary.sh
 
       - name: Rollback on failure
         if: failure()
@@ -252,7 +252,7 @@ jobs:
           DB_HOST: ${{ secrets.DB_HOST_PROD }}
           QDRANT_URL: ${{ secrets.QDRANT_URL_PROD }}
         run: |
-          envsubst < k8s/deployment-stable.yaml | kubectl apply -f -
+          envsubst < .k8s/deployment-stable.yaml | kubectl apply -f -
           kubectl rollout status deployment/content-platform-stable \
             -n "$NAMESPACE" --timeout=300s
 
@@ -269,12 +269,12 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          bash scripts/retag.sh \
+          bash .scripts/retag.sh \
             "${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}" \
             "${{ env.IMAGE_NAME }}:stable"
 
       - name: Smoke test production
-        run: bash scripts/smoke-test.sh "https://content-platform.example.com"
+        run: bash .scripts/smoke-test.sh "https://content-platform.example.com"
 
   # ╔════════════════════════════════════════════════════════════════╗
   # ║  RELEASE  (semantic-release)                                   ║

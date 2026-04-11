@@ -15,8 +15,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:ai-eval": "jest --config jest.integration.config.js --testPathPattern='test/ai-eval'",
     "test:all": "npm run test && npm run test:integration && npm run test:e2e",
-    "demo": "bash scripts/demo.sh",
-    "seed": "bash scripts/seed.sh",
+    "demo": "bash .scripts/demo.sh",
+    "seed": "bash .scripts/seed.sh",
     "format": "prettier --write \"src/**/*.ts\"",
     "prepare": "node -e \"process.env.NODE_ENV !== 'production' && require('child_process').execSync('husky', {stdio:'inherit'})\""
   },
