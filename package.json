@@ -17,6 +17,7 @@
     "test:all": "npm run test && npm run test:integration && npm run test:e2e",
     "demo": "bash .scripts/demo.sh",
     "seed": "bash .scripts/seed.sh",
+    "generate-openapi": "ts-node --project tsconfig.json .scripts/generate-openapi.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "prepare": "node -e \"process.env.NODE_ENV !== 'production' && require('child_process').execSync('husky', {stdio:'inherit'})\""
   },
