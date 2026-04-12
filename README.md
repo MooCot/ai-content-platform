@@ -422,7 +422,7 @@ k6 run --env BASE_URL=http://localhost:3000 --env BRAND_ID=<id> test/load/conten
 
 Two independent GitHub Actions workflows.
 
-**`ci.yml`** — triggers on every push and on PRs targeting `master`:
+**`ci.yml`** — triggers on every push and on PRs targeting `main`:
 
 ```
 install
@@ -433,7 +433,7 @@ install
               └── test:e2e
 ```
 
-**`deploy.yml`** — triggers only on push to `master`:
+**`deploy.yml`** — triggers only on push to `main`:
 
 ```
 build

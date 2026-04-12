@@ -1,7 +1,7 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Pages — generate OpenAPI spec and publish to GitHub Pages       ║
 # ║  Result: https://moocot.github.io/ai-content-platform/           ║
-# ║  Runs on push to master (after CI passes) and on manual trigger  ║
+# ║  Runs on push to main (after CI passes) and on manual trigger    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: Pages
 
