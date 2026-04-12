@@ -1,0 +1,56 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  Pages — generate OpenAPI spec and publish to GitHub Pages       ║
+# ║  Result: https://moocot.github.io/ai-content-platform/           ║
+# ║  Runs on push to master (after CI passes) and on manual trigger  ║
+# ╚══════════════════════════════════════════════════════════════════╝
+name: Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  generate-and-deploy:
+    name: Generate OpenAPI → GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Generate OpenAPI spec
+        run: npx ts-node --project tsconfig.json .scripts/generate-openapi.ts
+        env:
+          NODE_ENV: development
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
