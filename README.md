@@ -2,6 +2,8 @@
 
 Production-grade AI content generation platform built with NestJS, featuring multi-tenant RAG, agent pipelines, multi-LLM routing, and real-time SSE streaming.
 
+**[API Docs →](https://moocot.github.io/ai-content-platform/)**
+
 ## Architecture
 
 ```
