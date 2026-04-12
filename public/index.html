@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Brand AI Content Platform — API Docs</title>
+  <meta name="description" content="OpenAPI documentation for the Multi-Brand AI Content Platform: RAG pipelines, agent orchestration, multi-LLM routing, SSE streaming." />
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; padding: 0; }
+
+    .topbar { display: none !important; }
+
+    #swagger-ui .info .title small.version-stamp {
+      background: #2563eb;
+    }
+
+    /* Sticky header */
+    #swagger-ui .swagger-ui .wrapper:first-of-type {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,.08);
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: './openapi.json',
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset,
+      ],
+      layout: 'BaseLayout',
+      deepLinking: true,
+      displayRequestDuration: true,
+      defaultModelsExpandDepth: 1,
+      defaultModelExpandDepth: 2,
+      docExpansion: 'list',
+      filter: true,
+      tryItOutEnabled: false,
+    });
+  </script>
+</body>
+</html>
