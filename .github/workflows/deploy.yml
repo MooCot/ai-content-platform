@@ -69,6 +69,7 @@ jobs:
   deploy-staging:
     name: Deploy → Staging
     needs: build
+    if: ${{ secrets.KUBE_CONFIG_STAGING != '' }}
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -135,6 +136,7 @@ jobs:
   deploy-canary:
     name: Deploy → Canary (10%)
     needs: [build, deploy-staging]
+    if: ${{ secrets.KUBE_CONFIG_PROD != '' }}
     runs-on: ubuntu-latest
     environment:
       name: production/canary
@@ -187,6 +189,7 @@ jobs:
   verify-canary:
     name: Verify canary health
     needs: deploy-canary
+    if: ${{ secrets.KUBE_CONFIG_PROD != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -223,6 +226,7 @@ jobs:
   deploy-production:
     name: Deploy → Production
     needs: [build, verify-canary]
+    if: ${{ secrets.KUBE_CONFIG_PROD != '' }}
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -282,6 +286,7 @@ jobs:
   release:
     name: Release
     needs: deploy-production
+    if: ${{ secrets.KUBE_CONFIG_PROD != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write       # создать тег + GitHub Release
