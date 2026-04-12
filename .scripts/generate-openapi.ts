@@ -43,13 +43,13 @@ const repoMock = {
   findAndCount: () => Promise.resolve([[], 0]),
 };
 
-const dataSourceMock: Partial<DataSource> = {
+const dataSourceMock = {
   isInitialized: true,
-  destroy: noop as () => Promise<void>,
+  destroy: noop,
   query: () => Promise.resolve([{ '?column?': 1 }]),
-  manager: { transaction: noop, find: noop, findOne: noop } as never,
-  getRepository: () => repoMock as never,
-};
+  manager: { transaction: noop, find: noop, findOne: noop },
+  getRepository: () => repoMock,
+} as unknown as DataSource;
 
 const llmProviderMock = {
   provider: 'openai',
