@@ -39,7 +39,7 @@ jobs:
         run: npm ci --prefer-offline
 
       - name: Generate OpenAPI spec
-        run: npx ts-node --project tsconfig.json .scripts/generate-openapi.ts
+        run: npx ts-node --project tsconfig.json --transpile-only .scripts/generate-openapi.ts
         env:
           NODE_ENV: development
 
