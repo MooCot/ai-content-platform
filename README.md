@@ -121,8 +121,34 @@ docker-compose up -d
 npm install
 npm run start:dev
 
-# 4. Open docs
+# 4. Open Swagger UI
 open http://localhost:3000/docs
+
+# 5. (Optional) Seed demo brands + upload knowledge-base documents
+npm run seed
+
+# 6. (Optional) Run end-to-end demo with live SSE output
+npm run demo
+```
+
+## Demo
+
+Two convenience scripts in `.scripts/` let you see the full pipeline running without Swagger or curl:
+
+```bash
+# Creates two demo brands (Acme Tech + Bright Bites) and uploads a knowledge-base
+# document to each. Idempotent — safe to run multiple times.
+npm run seed
+
+# Full pipeline: create brand → wait for RAG indexing → generate a blog post → stream
+# tokens to the terminal as they arrive from the LLM.
+npm run demo
+```
+
+Both scripts accept an optional `BASE_URL` argument (default `http://localhost:3000`):
+
+```bash
+bash .scripts/demo.sh https://staging.content-platform.example.com
 ```
 
 ## API Reference
@@ -392,7 +418,7 @@ k6 run --env BASE_URL=http://localhost:3000 --env BRAND_ID=<id> test/load/conten
 
 ### Pipeline
 
-Два независимых workflow на GitHub Actions.
+Two independent GitHub Actions workflows.
 
 **`ci.yml`** — triggers on every push and on PRs targeting `master`:
 
