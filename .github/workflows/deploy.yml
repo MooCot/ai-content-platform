@@ -1,12 +1,12 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Deploy  —  build → staging → canary → production → release     ║
-# ║  Runs only on push to master                                     ║
+# ║  Runs only on push to main                                       ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: Deploy
 
 on:
   push:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: deploy-production

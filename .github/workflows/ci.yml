@@ -1,13 +1,13 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  CI  —  validate + test                                         ║
-# ║  Runs on every push and on PRs targeting master                 ║
+# ║  Runs on every push and on PRs targeting main                   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: CI
 
 on:
   push:
   pull_request:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
