@@ -2,8 +2,8 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # retag.sh <SOURCE_IMAGE> <TARGET_TAG>
 #
-# Перетегирует образ в registry без его локальной загрузки
-# (использует skopeo если доступен, иначе docker pull/tag/push)
+# Re-tags an image in the registry without pulling it locally.
+# Uses skopeo if available, falls back to docker pull/tag/push.
 # ──────────────────────────────────────────────────────────────────────────────
 set -eu
 

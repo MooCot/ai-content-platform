@@ -2,8 +2,8 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # smoke-test.sh <BASE_URL>
 #
-# Проверяет базовую доступность API после деплоя.
-# Завершается с кодом 1 при любой ошибке.
+# Verifies basic API availability after deployment.
+# Exits with code 1 on any failure.
 # ──────────────────────────────────────────────────────────────────────────────
 set -eu
 
@@ -51,12 +51,12 @@ log "App is up. Running smoke tests..."
 # ── Checks ───────────────────────────────────────────────────────────────────
 check "/api/v1/health"          "200"
 check "/api/v1/brands"          "200"
-check "/docs"                   "404"   # Swagger отключён в production
+check "/docs"                   "404"   # Swagger is disabled in production
 
-# Проверяем корректный 404 для несуществующего бренда
+# Non-existent brand must return 404
 check "/api/v1/brands/00000000-0000-0000-0000-000000000000" "404"
 
-# Проверяем что невалидный запрос возвращает 400 (ValidationPipe работает)
+# Invalid request body must return 400 (ValidationPipe)
 VALIDATION_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 \
   -X POST "$BASE_URL/api/v1/brands" \
   -H "Content-Type: application/json" \
