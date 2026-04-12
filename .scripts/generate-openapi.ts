@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * generate-openapi.ts
  *
