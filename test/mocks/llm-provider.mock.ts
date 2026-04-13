@@ -82,6 +82,11 @@ export function createGeminiProviderMock(): MockLLMProvider {
   return new MockLLMProvider(LLMProvider.GEMINI);
 }
 
+/** Factory for the Alibaba mock. */
+export function createAlibabaProviderMock(): MockLLMProvider {
+  return new MockLLMProvider(LLMProvider.ALIBABA);
+}
+
 /**
  * Creates a mock provider that throws a retryable error on the first N calls,
  * then succeeds. Used to test fallback/retry logic.

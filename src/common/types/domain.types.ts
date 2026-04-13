@@ -78,6 +78,7 @@ export enum LLMProvider {
   OPENAI = 'openai',
   CLAUDE = 'claude',
   GEMINI = 'gemini',
+  ALIBABA = 'alibaba',
 }
 
 // ─── Domain value objects ─────────────────────────────────────────────────────

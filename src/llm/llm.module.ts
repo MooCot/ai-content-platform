@@ -4,6 +4,7 @@ import { LLM_PROVIDER_TOKEN } from '../common/interfaces/llm-provider.interface'
 import { OpenAIProvider } from './providers/openai.provider';
 import { ClaudeProvider } from './providers/claude.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { AlibabaProvider } from './providers/alibaba.provider';
 import { LLMRouterService } from './llm-router.service';
 
 @Module({
@@ -12,14 +13,16 @@ import { LLMRouterService } from './llm-router.service';
     OpenAIProvider,
     ClaudeProvider,
     GeminiProvider,
+    AlibabaProvider,
     {
       provide: LLM_PROVIDER_TOKEN,
       useFactory: (
         openai: OpenAIProvider,
         claude: ClaudeProvider,
         gemini: GeminiProvider,
-      ) => [openai, claude, gemini],
-      inject: [OpenAIProvider, ClaudeProvider, GeminiProvider],
+        alibaba: AlibabaProvider,
+      ) => [openai, claude, gemini, alibaba],
+      inject: [OpenAIProvider, ClaudeProvider, GeminiProvider, AlibabaProvider],
     },
     LLMRouterService,
   ],

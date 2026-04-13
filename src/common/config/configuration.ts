@@ -31,8 +31,14 @@ export const configuration = () => ({
     defaultModel: process.env.GEMINI_DEFAULT_MODEL ?? 'gemini-1.5-pro',
   },
 
+  alibaba: {
+    apiKey: process.env.DASHSCOPE_API_KEY ?? '',
+    defaultModel: process.env.ALIBABA_DEFAULT_MODEL ?? 'qwen-plus',
+    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  },
+
   llmRouter: {
-    fallbackChain: (process.env.LLM_FALLBACK_CHAIN ?? 'claude,openai,gemini').split(','),
+    fallbackChain: (process.env.LLM_FALLBACK_CHAIN ?? 'claude,openai,gemini,alibaba').split(','),
     maxRetries: parseInt(process.env.LLM_MAX_RETRIES ?? '3', 10),
     retryDelayMs: parseInt(process.env.LLM_RETRY_DELAY_MS ?? '1000', 10),
     circuitBreaker: {
