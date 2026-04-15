@@ -5,5 +5,8 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "tsConfigPath": "tsconfig.build.json"
+  },
+  "watchOptions": {
+    "restartDelay": 500
   }
 }
