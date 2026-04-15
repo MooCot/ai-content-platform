@@ -7,6 +7,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-http://localhost:3000}"
+API_URL="$BASE_URL/api/v1"
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
 DOC_FILE="$FIXTURE_DIR/acme-tech-knowledge-base.txt"
 BRAND_SLUG="acme-tech"
@@ -28,7 +29,7 @@ require jq
 # ── 1. health check ───────────────────────────────────────────────────────────
 step "Checking API health at $BASE_URL …"
 for i in $(seq 1 10); do
-  STATUS=$(curl -sf "$BASE_URL/health" | jq -r '.status' 2>/dev/null || true)
+  STATUS=$(curl -sf "$API_URL/health" | jq -r '.status' 2>/dev/null || true)
   if [[ "$STATUS" == "ok" ]]; then
     ok "API is healthy"
     break
@@ -42,13 +43,13 @@ done
 
 # ── 2. create (or reuse) brand ────────────────────────────────────────────────
 step "Looking for existing brand '$BRAND_SLUG' …"
-BRAND_ID=$(curl -sf "$BASE_URL/brands" | jq -r --arg slug "$BRAND_SLUG" '.[] | select(.slug==$slug) | .id' 2>/dev/null || true)
+BRAND_ID=$(curl -sf "$API_URL/brands" | jq -r --arg slug "$BRAND_SLUG" '.[] | select(.slug==$slug) | .id' 2>/dev/null || true)
 
 if [[ -n "$BRAND_ID" ]]; then
   ok "Brand already exists: $BRAND_ID"
 else
   step "Creating brand '$BRAND_NAME' …"
-  BRAND_RESP=$(curl -sf -X POST "$BASE_URL/brands" \
+  BRAND_RESP=$(curl -sf -X POST "$API_URL/brands" \
     -H "Content-Type: application/json" \
     -d '{
       "slug": "'"$BRAND_SLUG"'",
@@ -56,7 +57,7 @@ else
       "config": {
         "defaultTone": "FORMAL",
         "allowedModels": ["gpt-4o", "gpt-4o-mini"],
-        "preferredProvider": "OPENAI",
+        "preferredProvider": "openai",
         "ragEnabled": true,
         "maxContentLength": 2000
       }
@@ -72,7 +73,7 @@ echo "  BRAND_ID = $BRAND_ID"
 step "Uploading knowledge-base document …"
 [[ -f "$DOC_FILE" ]] || die "Fixture file not found: $DOC_FILE"
 
-UPLOAD_RESP=$(curl -sf -X POST "$BASE_URL/brands/$BRAND_ID/rag/upload" \
+UPLOAD_RESP=$(curl -sf -X POST "$API_URL/brands/$BRAND_ID/rag/upload" \
   -F "file=@$DOC_FILE;type=text/plain" 2>&1) || true
 DOC_ID=$(echo "$UPLOAD_RESP" | jq -r '.id' 2>/dev/null || true)
 
@@ -87,7 +88,7 @@ fi
 if [[ -n "${DOC_ID:-}" && "$DOC_ID" != "null" ]]; then
   step "Waiting for document to be indexed …"
   for i in $(seq 1 30); do
-    DOC_STATUS=$(curl -sf "$BASE_URL/brands/$BRAND_ID/rag/documents" \
+    DOC_STATUS=$(curl -sf "$API_URL/brands/$BRAND_ID/rag/documents" \
       | jq -r --arg id "$DOC_ID" '.[] | select(.id==$id) | .status' 2>/dev/null || true)
     case "$DOC_STATUS" in
       READY)   ok "Document indexed (READY)"; break ;;
@@ -109,7 +110,7 @@ echo "  topic       : $TOPIC"
 echo "  contentType : $CONTENT_TYPE"
 
 CORR_ID="demo-$(date +%s)"
-GEN_RESP=$(curl -sf -X POST "$BASE_URL/brands/$BRAND_ID/content/generate" \
+GEN_RESP=$(curl -sf -X POST "$API_URL/brands/$BRAND_ID/content/generate" \
   -H "Content-Type: application/json" \
   -H "x-correlation-id: $CORR_ID" \
   -d '{
@@ -166,7 +167,7 @@ echo "────────────────────────�
 # ── 7. fetch final job result ─────────────────────────────────────────────────
 step "Fetching job result …"
 sleep 1
-JOB_RESULT=$(curl -sf "$BASE_URL/brands/$BRAND_ID/content/$JOB_ID" 2>/dev/null || true)
+JOB_RESULT=$(curl -sf "$API_URL/brands/$BRAND_ID/content/$JOB_ID" 2>/dev/null || true)
 JOB_STATUS=$(echo "$JOB_RESULT" | jq -r '.status' 2>/dev/null || true)
 
 if [[ "$JOB_STATUS" == "DONE" ]]; then
@@ -185,5 +186,5 @@ echo ""
 ok "Demo complete! Brand ID: $BRAND_ID"
 echo ""
 echo "  Swagger UI : ${bold}$BASE_URL/api${reset}"
-echo "  Brand docs : ${bold}$BASE_URL/brands/$BRAND_ID/rag/documents${reset}"
-echo "  Job status : ${bold}$BASE_URL/brands/$BRAND_ID/content/$JOB_ID${reset}"
+echo "  Brand docs : ${bold}$API_URL/brands/$BRAND_ID/rag/documents${reset}"
+echo "  Job status : ${bold}$API_URL/brands/$BRAND_ID/content/$JOB_ID${reset}"

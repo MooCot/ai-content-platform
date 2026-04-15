@@ -9,6 +9,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-http://localhost:3000}"
+API_URL="$BASE_URL/api/v1"
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
 
 bold=$'\e[1m'; reset=$'\e[0m'
@@ -27,7 +28,7 @@ require jq
 create_brand() {
   local slug="$1" name="$2" tone="$3" provider="$4"
   local existing
-  existing=$(curl -sf "$BASE_URL/brands" \
+  existing=$(curl -sf "$API_URL/brands" \
     | jq -r --arg s "$slug" '.[] | select(.slug==$s) | .id')
   if [[ -n "$existing" ]]; then
     warn "Brand '$slug' already exists ($existing) — skipping"
@@ -35,7 +36,7 @@ create_brand() {
     return
   fi
   local resp
-  resp=$(curl -sf -X POST "$BASE_URL/brands" \
+  resp=$(curl -sf -X POST "$API_URL/brands" \
     -H "Content-Type: application/json" \
     -d '{
       "slug": "'"$slug"'",
@@ -61,7 +62,7 @@ upload_doc() {
   filename=$(basename "$file_path")
   [[ -f "$file_path" ]] || { warn "File not found: $file_path"; return; }
   local resp
-  resp=$(curl -sf -X POST "$BASE_URL/brands/$brand_id/rag/upload" \
+  resp=$(curl -sf -X POST "$API_URL/brands/$brand_id/rag/upload" \
     -F "file=@$file_path;type=text/plain")
   local doc_id doc_status
   doc_id=$(echo "$resp" | jq -r '.id' 2>/dev/null || true)
@@ -76,7 +77,7 @@ upload_doc() {
 # ─── health check ──────────────────────────────────────────────────────────────
 step "Health check …"
 for i in $(seq 1 10); do
-  STATUS=$(curl -sf "$BASE_URL/health" | jq -r '.status' 2>/dev/null || true)
+  STATUS=$(curl -sf "$API_URL/health" | jq -r '.status' 2>/dev/null || true)
   [[ "$STATUS" == "ok" ]] && { ok "API healthy"; break; }
   [[ $i -eq 10 ]] && die "API not responding. Start the server first:\n  npm run start:dev"
   warn "Retry $i/10 …"; sleep 3
@@ -84,12 +85,12 @@ done
 
 # ─── brand 1: Acme Tech (B2B SaaS) ───────────────────────────────────────────
 step "Seeding brand: Acme Tech …"
-ACME_ID=$(create_brand "acme-tech" "Acme Tech" "FORMAL" "OPENAI")
+ACME_ID=$(create_brand "acme-tech" "Acme Tech" "FORMAL" "openai")
 upload_doc "$ACME_ID" "$FIXTURE_DIR/acme-tech-knowledge-base.txt"
 
 # ─── brand 2: Bright Bites (consumer food, casual tone) ──────────────────────
 step "Seeding brand: Bright Bites …"
-BRIGHT_ID=$(create_brand "bright-bites" "Bright Bites" "FRIENDLY" "OPENAI")
+BRIGHT_ID=$(create_brand "bright-bites" "Bright Bites" "FRIENDLY" "openai")
 
 # Inline fixture for brand 2 (no separate file needed)
 BRIGHT_DOC="$FIXTURE_DIR/bright-bites-knowledge-base.txt"
@@ -132,12 +133,12 @@ echo ""
 echo "  ${bold}Acme Tech${reset}    : $ACME_ID"
 echo "  ${bold}Bright Bites${reset} : $BRIGHT_ID"
 echo ""
-echo "  All brands: ${bold}$BASE_URL/brands${reset}"
+echo "  All brands: ${bold}$API_URL/brands${reset}"
 echo ""
 echo "Next steps:"
 echo "  1. Wait ~10 s for documents to finish indexing"
 echo "  2. Generate content:"
-echo "       curl -X POST $BASE_URL/brands/$ACME_ID/content/generate \\"
+echo "       curl -X POST $API_URL/brands/$ACME_ID/content/generate \\"
 echo "         -H 'Content-Type: application/json' \\"
 echo "         -d '{\"topic\": \"How FlowBot saves 18 hours a week\", \"contentType\": \"BLOG\"}'"
 echo "  3. Or run the full demo:  ${bold}npm run demo${reset}"
