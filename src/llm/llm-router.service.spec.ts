@@ -152,9 +152,11 @@ describe('LLMRouterService', () => {
       expect(result[0]).toHaveLength(1536);
     });
 
-    it('throws if OpenAI provider is not registered', async () => {
-      await buildModule([claudeMock]); // no OpenAI
-      await expect(service.embed(['text'])).rejects.toThrow('OpenAI provider not registered');
+    it('throws if embedding provider is not registered', async () => {
+      await buildModule([claudeMock]); // no OpenAI (default embedding provider)
+      await expect(service.embed(['text'])).rejects.toThrow(
+        "Embedding provider 'openai' not registered",
+      );
     });
   });
 
