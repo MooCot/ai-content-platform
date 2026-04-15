@@ -30,10 +30,11 @@ services:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:6333/healthz']
+      test: ['CMD-SHELL', 'bash -c "exec 3<>/dev/tcp/localhost/6333 && echo ok" || exit 1']
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   app:
     build:
