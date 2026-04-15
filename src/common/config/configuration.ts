@@ -39,6 +39,7 @@ export const configuration = () => ({
 
   llmRouter: {
     fallbackChain: (process.env.LLM_FALLBACK_CHAIN ?? 'claude,openai,gemini,alibaba').split(','),
+    embeddingProvider: process.env.EMBEDDING_PROVIDER ?? 'openai',
     maxRetries: parseInt(process.env.LLM_MAX_RETRIES ?? '3', 10),
     retryDelayMs: parseInt(process.env.LLM_RETRY_DELAY_MS ?? '1000', 10),
     circuitBreaker: {

@@ -163,10 +163,17 @@ export class LLMRouterService {
     return subject.asObservable();
   }
 
-  /** Embed using the OpenAI provider (only provider supporting embeddings). */
+  /** Embed using the configured embedding provider (default: openai). */
   async embed(texts: string[]): Promise<number[][]> {
-    const provider = this.providerMap.get(LLMProvider.OPENAI);
-    if (!provider) throw new Error('OpenAI provider not registered — required for embeddings');
+    const providerName = this.config.get('llmRouter.embeddingProvider', {
+      infer: true,
+    }) as string;
+    const key = providerName as LLMProvider;
+    const provider = this.providerMap.get(key);
+    if (!provider)
+      throw new Error(
+        `Embedding provider '${providerName}' not registered. Set EMBEDDING_PROVIDER env var.`,
+      );
     return provider.embed(texts);
   }
 

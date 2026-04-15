@@ -124,8 +124,13 @@ export class AlibabaProvider implements ILLMProvider {
     return subject.asObservable();
   }
 
-  async embed(_texts: string[], _model?: string): Promise<number[][]> {
-    throw new Error('Alibaba provider does not support embeddings. Use OpenAI for embeddings.');
+  async embed(texts: string[], model?: string): Promise<number[][]> {
+    const embModel = model ?? 'text-embedding-v1';
+    const response = await this.client.embeddings.create({
+      model: embModel,
+      input: texts,
+    });
+    return response.data.map((d) => d.embedding);
   }
 
   async isAvailable(): Promise<boolean> {
