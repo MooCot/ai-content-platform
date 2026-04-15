@@ -9,6 +9,7 @@ set -euo pipefail
 BASE_URL="${1:-http://localhost:3000}"
 API_URL="$BASE_URL/api/v1"
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOC_FILE="$FIXTURE_DIR/acme-tech-knowledge-base.txt"
 BRAND_SLUG="acme-tech"
 BRAND_NAME="Acme Tech"
@@ -25,6 +26,93 @@ die()   { echo "${red}✗ $*${reset}" >&2; exit 1; }
 require() { command -v "$1" &>/dev/null || die "Required tool not found: $1"; }
 require curl
 require jq
+
+# ── 0. load .env and preflight checks ────────────────────────────────────────
+ENV_FILE="$SCRIPT_DIR/../.env"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
+
+is_placeholder() {
+  local val="$1"
+  [[ -z "$val" || "$val" == "sk-ant-..."* || "$val" == "sk-..."* || "$val" == "AIza..."* ]]
+}
+
+step "Checking required environment variables …"
+HAS_LLM=false
+declare -A PROVIDER_KEYS=(
+  [claude]="${ANTHROPIC_API_KEY:-}"
+  [openai]="${OPENAI_API_KEY:-}"
+  [gemini]="${GOOGLE_AI_API_KEY:-}"
+  [alibaba]="${DASHSCOPE_API_KEY:-}"
+)
+for name in "${!PROVIDER_KEYS[@]}"; do
+  val="${PROVIDER_KEYS[$name]}"
+  if ! is_placeholder "$val"; then
+    HAS_LLM=true
+  fi
+done
+if [[ "$HAS_LLM" == false ]]; then
+  die "No LLM API key configured. Set at least one in .env:\n  ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, or DASHSCOPE_API_KEY"
+fi
+ok "At least one LLM key is configured"
+
+# ── ping configured providers ─────────────────────────────────────────────────
+step "Pinging configured LLM providers …"
+
+ping_provider() {
+  local name="$1" url="$2" auth_header="$3"
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "$auth_header" "$url" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    ok "$name — reachable"
+  elif [[ "$code" == "000" ]]; then
+    warn "$name — no response (timeout or connection refused) — this provider will be skipped by the router"
+  else
+    warn "$name — HTTP $code (key may be invalid or rate-limited)"
+  fi
+}
+
+if ! is_placeholder "${ANTHROPIC_API_KEY:-}"; then
+  ping_provider "claude (Anthropic)" \
+    "https://api.anthropic.com/v1/models" \
+    "x-api-key: ${ANTHROPIC_API_KEY}"
+fi
+if ! is_placeholder "${OPENAI_API_KEY:-}"; then
+  ping_provider "openai" \
+    "https://api.openai.com/v1/models" \
+    "Authorization: Bearer ${OPENAI_API_KEY}"
+fi
+if ! is_placeholder "${GOOGLE_AI_API_KEY:-}"; then
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+    "https://generativelanguage.googleapis.com/v1beta/models?key=${GOOGLE_AI_API_KEY}" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then ok "gemini (Google) — reachable"
+  elif [[ "$code" == "000" ]]; then warn "gemini — no response"
+  else warn "gemini — HTTP $code"; fi
+fi
+if ! is_placeholder "${DASHSCOPE_API_KEY:-}"; then
+  ping_provider "alibaba (DashScope)" \
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models" \
+    "Authorization: Bearer ${DASHSCOPE_API_KEY}"
+fi
+
+# ── check embedding provider ──────────────────────────────────────────────────
+EMBEDDING_PROVIDER="${EMBEDDING_PROVIDER:-openai}"
+EMBEDDING_OK=false
+case "$EMBEDDING_PROVIDER" in
+  openai)
+    if ! is_placeholder "${OPENAI_API_KEY:-}"; then EMBEDDING_OK=true; fi ;;
+  alibaba)
+    if ! is_placeholder "${DASHSCOPE_API_KEY:-}"; then EMBEDDING_OK=true; fi ;;
+esac
+
+if [[ "$EMBEDDING_OK" == false ]]; then
+  warn "Embedding provider '$EMBEDDING_PROVIDER' has no API key set — RAG indexing will be skipped"
+  warn "Set the key for EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER or change EMBEDDING_PROVIDER in .env"
+fi
 
 # ── 1. health check ───────────────────────────────────────────────────────────
 step "Checking API health at $BASE_URL …"
@@ -70,18 +158,24 @@ fi
 echo "  BRAND_ID = $BRAND_ID"
 
 # ── 3. upload knowledge-base document ────────────────────────────────────────
-step "Uploading knowledge-base document …"
-[[ -f "$DOC_FILE" ]] || die "Fixture file not found: $DOC_FILE"
+if [[ "$EMBEDDING_OK" == true ]]; then
+  step "Uploading knowledge-base document …"
+  [[ -f "$DOC_FILE" ]] || die "Fixture file not found: $DOC_FILE"
 
-UPLOAD_RESP=$(curl -sf -X POST "$API_URL/brands/$BRAND_ID/rag/upload" \
-  -F "file=@$DOC_FILE;type=text/plain" 2>&1) || true
-DOC_ID=$(echo "$UPLOAD_RESP" | jq -r '.id' 2>/dev/null || true)
+  UPLOAD_RESP=$(curl -sf -X POST "$API_URL/brands/$BRAND_ID/rag/upload" \
+    -F "file=@$DOC_FILE;type=text/plain" 2>&1) || true
+  DOC_ID=$(echo "$UPLOAD_RESP" | jq -r '.id' 2>/dev/null || true)
 
-if [[ -n "$DOC_ID" && "$DOC_ID" != "null" ]]; then
-  ok "Document accepted: $DOC_ID"
+  if [[ -n "$DOC_ID" && "$DOC_ID" != "null" ]]; then
+    ok "Document accepted: $DOC_ID"
+  else
+    warn "Upload response: $UPLOAD_RESP"
+    warn "Continuing without fresh upload (document may already exist)"
+    DOC_ID=""
+  fi
 else
-  warn "Upload response: $UPLOAD_RESP"
-  warn "Continuing without fresh upload (document may already exist)"
+  warn "Skipping document upload — embedding provider not configured"
+  DOC_ID=""
 fi
 
 # ── 4. wait for document to reach READY ──────────────────────────────────────
@@ -182,6 +276,7 @@ else
   warn "Job status: ${JOB_STATUS:-unknown}"
 fi
 
+# ── 8. summary ────────────────────────────────────────────────────────────────
 echo ""
 ok "Demo complete! Brand ID: $BRAND_ID"
 echo ""
@@ -192,10 +287,15 @@ echo "  ${bold}1. Job result${reset} — check that status is DONE and read the 
 echo "     ${bold}$API_URL/brands/$BRAND_ID/content/$JOB_ID${reset}"
 echo "     ${yellow}(refresh until status changes from RUNNING → DONE)${reset}"
 echo ""
-echo "  ${bold}2. RAG documents${reset} — verify the knowledge-base document was indexed:"
-echo "     ${bold}$API_URL/brands/$BRAND_ID/rag/documents${reset}"
-echo "     ${yellow}(wait ~10–15 s after seed; status should reach READY)${reset}"
-echo ""
+if [[ "$EMBEDDING_OK" == true ]]; then
+  echo "  ${bold}2. RAG documents${reset} — verify the knowledge-base document was indexed:"
+  echo "     ${bold}$API_URL/brands/$BRAND_ID/rag/documents${reset}"
+  echo "     ${yellow}(wait ~10–15 s after seed; status should reach READY)${reset}"
+  echo ""
+else
+  warn "RAG documents link skipped — configure EMBEDDING_PROVIDER and its API key to enable RAG indexing"
+  echo ""
+fi
 echo "  ${bold}3. Swagger UI${reset} — explore all API endpoints interactively:"
 echo "     ${bold}$BASE_URL/docs${reset}"
 echo "────────────────────────────────────────────────────────"
