@@ -18,7 +18,7 @@ export class MemoryEventEntity {
   brandId!: string;
 
   /** The content-job that produced this event (nullable for brand-level events). */
-  @Column({ name: 'job_id', nullable: true })
+  @Column({ name: 'job_id', type: 'text', nullable: true })
   jobId!: string | null;
 
   @Column({ type: 'enum', enum: AgentRole })

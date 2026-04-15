@@ -52,7 +52,7 @@ export class ContentJobEntity {
   errorMessage!: string | null;
 
   /** BullMQ job ID — same as `id` (used as idempotency key). Kept for debuggability. */
-  @Column({ name: 'queue_job_id', nullable: true })
+  @Column({ name: 'queue_job_id', type: 'text', nullable: true })
   queueJobId!: string | null;
 
   /** How many times this job has been attempted (incremented by the processor). */
@@ -60,7 +60,7 @@ export class ContentJobEntity {
   attempts!: number;
 
   /** X-Correlation-ID from the originating HTTP request. */
-  @Column({ name: 'correlation_id', nullable: true })
+  @Column({ name: 'correlation_id', type: 'text', nullable: true })
   correlationId!: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
