@@ -35,7 +35,7 @@
     "@opentelemetry/auto-instrumentations-node": "^0.46.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.52.1",
     "@opentelemetry/sdk-node": "^0.52.1",
-    "@qdrant/js-client-rest": "^1.8.0",
+    "@qdrant/js-client-rest": "1.9.0",
     "bullmq": "^5.8.3",
     "cheerio": "^1.0.0-rc.12",
     "class-transformer": "^0.5.1",
