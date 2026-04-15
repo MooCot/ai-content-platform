@@ -102,17 +102,40 @@ fi
 # ── check embedding provider ──────────────────────────────────────────────────
 EMBEDDING_PROVIDER="${EMBEDDING_PROVIDER:-openai}"
 EMBEDDING_OK=false
+
+step "Checking embedding provider '$EMBEDDING_PROVIDER' …"
 case "$EMBEDDING_PROVIDER" in
   openai)
-    if ! is_placeholder "${OPENAI_API_KEY:-}"; then EMBEDDING_OK=true; fi ;;
+    if is_placeholder "${OPENAI_API_KEY:-}"; then
+      warn "OPENAI_API_KEY is not set — RAG indexing will be skipped"
+    else
+      code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+        -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+        "https://api.openai.com/v1/models" 2>/dev/null || echo "000")
+      if [[ "$code" == "200" ]]; then
+        ok "openai embedding provider is reachable"
+        EMBEDDING_OK=true
+      else
+        warn "openai returned HTTP $code — RAG indexing will be skipped"
+      fi
+    fi ;;
   alibaba)
-    if ! is_placeholder "${DASHSCOPE_API_KEY:-}"; then EMBEDDING_OK=true; fi ;;
+    if is_placeholder "${DASHSCOPE_API_KEY:-}"; then
+      warn "DASHSCOPE_API_KEY is not set — RAG indexing will be skipped"
+    else
+      code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+        -H "Authorization: Bearer ${DASHSCOPE_API_KEY}" \
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models" 2>/dev/null || echo "000")
+      if [[ "$code" == "200" ]]; then
+        ok "alibaba embedding provider is reachable"
+        EMBEDDING_OK=true
+      else
+        warn "alibaba (DashScope) returned HTTP $code — RAG indexing will be skipped"
+      fi
+    fi ;;
+  *)
+    warn "Unknown EMBEDDING_PROVIDER='$EMBEDDING_PROVIDER' — RAG indexing will be skipped" ;;
 esac
-
-if [[ "$EMBEDDING_OK" == false ]]; then
-  warn "Embedding provider '$EMBEDDING_PROVIDER' has no API key set — RAG indexing will be skipped"
-  warn "Set the key for EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER or change EMBEDDING_PROVIDER in .env"
-fi
 
 # ── 1. health check ───────────────────────────────────────────────────────────
 step "Checking API health at $BASE_URL …"
