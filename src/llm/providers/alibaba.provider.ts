@@ -125,11 +125,15 @@ export class AlibabaProvider implements ILLMProvider {
   }
 
   async embed(texts: string[], model?: string): Promise<number[][]> {
-    const embModel = model ?? 'text-embedding-v1';
+    const embModel = model ?? 'text-embedding-v3';
+    const dimension = this.config.get('rag.embeddingDimension', { infer: true });
+    // DashScope text-embedding-v3 supports [512, 768, 1024]; clamp to max supported
+    const supportedDimension = dimension <= 512 ? 512 : dimension <= 768 ? 768 : 1024;
     const response = await this.client.embeddings.create({
       model: embModel,
       input: texts,
-    });
+      dimensions: supportedDimension,
+    } as Parameters<typeof this.client.embeddings.create>[0]);
     return response.data.map((d) => d.embedding);
   }
 

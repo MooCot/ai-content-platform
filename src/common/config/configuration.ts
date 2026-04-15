@@ -54,7 +54,7 @@ export const configuration = () => ({
     chunkSize: parseInt(process.env.RAG_CHUNK_SIZE ?? '512', 10),
     chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP ?? '64', 10),
     searchLimit: parseInt(process.env.RAG_SEARCH_LIMIT ?? '5', 10),
-    embeddingDimension: 1536, // OpenAI ada-002 fixed dimension
+    embeddingDimension: parseInt(process.env.EMBEDDING_DIMENSION ?? '1536', 10),
   },
 
   streaming: {
