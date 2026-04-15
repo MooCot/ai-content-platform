@@ -533,7 +533,7 @@ Each provider has an independent circuit breaker (`CLOSED → OPEN → HALF_OPEN
 
 When a circuit is OPEN the router skips that provider and moves to the next in the fallback chain. `onFallback` is still triggered so the pipeline records a `llm_fallback` degradation reason. Use `LLMRouterService.getCircuitState(provider)` to expose circuit states in a health endpoint.
 
-Embeddings always use OpenAI (`text-embedding-ada-002`) since Claude and Gemini do not expose embedding APIs.
+Embeddings are delegated to the provider set by `EMBEDDING_PROVIDER` (default: `openai`). Alibaba DashScope (`text-embedding-v3`, dimensions 512/768/1024) is also supported. Claude and Gemini do not expose embedding APIs and throw on `embed()`. Set `EMBEDDING_DIMENSION` to match the chosen provider — defaults to `1536` (OpenAI ada-002), use `1024` for DashScope. **Changing dimension requires clearing all Qdrant collections** (`docker-compose down -v`).
 
 ---
 
