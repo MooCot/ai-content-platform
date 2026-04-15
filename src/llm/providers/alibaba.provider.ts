@@ -129,12 +129,19 @@ export class AlibabaProvider implements ILLMProvider {
     const dimension = this.config.get('rag.embeddingDimension', { infer: true });
     // DashScope text-embedding-v3 supports [512, 768, 1024]; clamp to max supported
     const supportedDimension = dimension <= 512 ? 512 : dimension <= 768 ? 768 : 1024;
-    const response = await this.client.embeddings.create({
-      model: embModel,
-      input: texts,
-      dimensions: supportedDimension,
-    } as Parameters<typeof this.client.embeddings.create>[0]);
-    return response.data.map((d) => d.embedding);
+    // DashScope allows max 10 texts per request — process in batches
+    const BATCH_SIZE = 10;
+    const results: number[][] = [];
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      const response = await this.client.embeddings.create({
+        model: embModel,
+        input: batch,
+        dimensions: supportedDimension,
+      } as Parameters<typeof this.client.embeddings.create>[0]);
+      results.push(...response.data.map((d) => d.embedding));
+    }
+    return results;
   }
 
   async isAvailable(): Promise<boolean> {
