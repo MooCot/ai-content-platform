@@ -18,6 +18,19 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: content-platform-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   qdrant:
     image: qdrant/qdrant:v1.9.0
     container_name: content-platform-qdrant
@@ -36,27 +49,8 @@ services:
       retries: 5
       start_period: 10s
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: content-platform-app
-    ports:
-      - '3000:3000'
-    environment:
-      NODE_ENV: production
-      DB_HOST: postgres
-      DB_PORT: 5432
-      QDRANT_URL: http://qdrant:6333
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-    restart: unless-stopped
 
 volumes:
   postgres_data:
   qdrant_data:
+  redis_data:
